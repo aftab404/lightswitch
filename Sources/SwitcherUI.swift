@@ -25,6 +25,7 @@ final class SwitcherModel: ObservableObject {
     struct Result: Identifiable {
         enum Target {
             case window(WindowItem)
+            case tab(BrowserTab)
             case app(InstalledApp)
         }
 
@@ -46,6 +47,15 @@ final class SwitcherModel: ObservableObject {
             badge = item.badge
         }
 
+        init(_ tab: BrowserTab) {
+            target = .tab(tab)
+            id = tab.id
+            title = tab.title
+            subtitle = tab.subtitle
+            icon = tab.icon
+            badge = nil
+        }
+
         init(_ app: InstalledApp) {
             target = .app(app)
             id = app.path
@@ -58,11 +68,13 @@ final class SwitcherModel: ObservableObject {
 
     /// One or two letters match most installed apps, so only the best few are listed.
     private static let maxApps = 6
+    /// The same goes for tabs other than the ones windows show, which can number in the hundreds.
+    private static let maxOtherTabs = 10
 
     @Published var query = "" {
         didSet { if query != oldValue { refilter() } }
     }
-    /// Matching windows, then matching apps that aren't running.
+    /// Matching windows and browser tabs, then matching apps that aren't running.
     @Published private(set) var results: [Result] = []
     /// Where the apps start in `results`, if any matched.
     private(set) var firstAppIndex: Int?
@@ -78,11 +90,20 @@ final class SwitcherModel: ObservableObject {
     var apps: [InstalledApp] = [] {
         didSet { refilter() }
     }
+    /// The tabs of each browser that could be read, by pid. While typing they're listed in place of that
+    /// browser's windows: a browser window's row is just its current tab.
+    private var tabs: [pid_t: [BrowserTab]] = [:]
+    /// For each of those browsers, one tab per window, to tell which window rows the tabs stand in for.
+    private var tabWindows: [pid_t: [BrowserTab]] = [:]
 
     var onConfirm: (WindowItem) -> Void = { _ in }
+    /// The tab, and its window's row if the window could be told apart from the browser's others by title.
+    var onSwitchToTab: (BrowserTab, WindowItem?) -> Void = { _, _ in }
     var onOpen: (InstalledApp) -> Void = { _ in }
     var onCancel: () -> Void = {}
     var onHeightChange: (CGFloat) -> Void = { _ in }
+
+    var hasTabs: Bool { !tabs.isEmpty }
 
     /// The app that was frontmost when the panel opened. Its top window is the one the user is already in.
     private var currentAppPID: pid_t?
@@ -110,8 +131,22 @@ final class SwitcherModel: ObservableObject {
         currentAppPID = currentApp
         needsAccessibility = !Accessibility.isTrusted
         query = ""
+        tabs = [:]
+        tabWindows = [:]
         items = []
         showCount += 1
+    }
+
+    func setTabs(_ browserTabs: [BrowserTab], of pid: pid_t) {
+        tabs[pid] = browserTabs
+        tabWindows[pid] = browserTabs.filter { $0.index == 1 }
+        guard !query.isEmpty else { return }
+        // Tabs usually arrive a moment after the windows. If the user has already moved down to a row, keep it.
+        let selected = selection > 0 && results.indices.contains(selection) ? results[selection].id : nil
+        refilter()
+        if let selected, let index = results.firstIndex(where: { $0.id == selected }) {
+            selection = index
+        }
     }
 
     func requestAccessibility() {
@@ -128,8 +163,19 @@ final class SwitcherModel: ObservableObject {
         guard results.indices.contains(selection) else { return }
         switch results[selection].target {
         case .window(let item): onConfirm(item)
+        case .tab(let tab): onSwitchToTab(tab, window(of: tab))
         case .app(let app): onOpen(app)
         }
+    }
+
+    private func window(of tab: BrowserTab) -> WindowItem? {
+        let matches = items.filter {
+            $0.pid == tab.pid && $0.element != nil && BrowserTabs.windowTitle($0.title, matches: tab)
+        }
+        // For "Inbox", "Inbox - Google Chrome" rather than "Inbox - Gmail - Google Chrome".
+        guard let shortest = matches.map(\.title.count).min() else { return nil }
+        let closest = matches.filter { $0.title.count == shortest }
+        return closest.count == 1 ? closest[0] : nil
     }
 
     /// Keyboard commands from the search field. Returns true when handled.
@@ -159,8 +205,16 @@ final class SwitcherModel: ObservableObject {
             // say, the desktop has focus or a floating window from another app sits on top.
             selection = items.count > 1 && items[0].pid == currentAppPID ? 1 : 0
         } else {
-            var windows: [(score: Int, index: Int, result: Result)] = []
+            // Equal scores keep windows in stacking order. A browser's tabs go where its front window is,
+            // the ones their windows show first.
+            var found: [(score: Int, order: [Int], result: Result, isOtherTab: Bool)] = []
             for (index, item) in items.enumerated() {
+                // Rows for windows whose tabs are listed, and an app row once any are. Others, like Safari's
+                // Settings window, stay.
+                if let windows = tabWindows[item.pid], !windows.isEmpty,
+                   item.element == nil || windows.contains(where: { BrowserTabs.windowTitle(item.title, matches: $0) }) {
+                    continue
+                }
                 let title = Array(item.displayTitle)
                 guard let match = Self.match(terms, in: title + [" "] + Array(item.appName)) else { continue }
                 var result = Result(item)
@@ -168,9 +222,29 @@ final class SwitcherModel: ObservableObject {
                 if item.element != nil { // an app row's title is the app name already
                     result.subtitleHits = Set(match.hits.filter { $0 > title.count }.map { $0 - title.count - 1 })
                 }
-                windows.append((match.score, index, result))
+                found.append((match.score, [index], result, false))
             }
-            windows.sort { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
+            for (pid, browserTabs) in tabs {
+                let place = items.firstIndex { $0.pid == pid } ?? items.count
+                for tab in browserTabs {
+                    guard let match = Self.match(terms, in: tab) else { continue }
+                    var result = Result(tab)
+                    result.titleHits = match.titleHits
+                    result.subtitleHits = match.subtitleHits
+                    let order = [place, Int(pid), tab.isActive ? 0 : 1, tab.windowOrder, tab.index]
+                    found.append((match.score, order, result, !tab.isActive))
+                }
+            }
+            found.sort { $0.score != $1.score ? $0.score > $1.score : $0.order.lexicographicallyPrecedes($1.order) }
+            var listed: [Result] = []
+            var otherTabs = 0
+            for entry in found {
+                if entry.isOtherTab {
+                    otherTabs += 1
+                    if otherTabs > Self.maxOtherTabs { continue }
+                }
+                listed.append(entry.result)
+            }
 
             var matchedApps: [(score: Int, index: Int, app: InstalledApp, hits: Set<Int>)] = []
             for (index, app) in apps.enumerated() {
@@ -189,8 +263,8 @@ final class SwitcherModel: ObservableObject {
                 return result
             }
 
-            firstAppIndex = appResults.isEmpty ? nil : windows.count
-            results = windows.map(\.result) + appResults
+            firstAppIndex = appResults.isEmpty ? nil : listed.count
+            results = listed + appResults
             selection = 0
         }
         onHeightChange(height)
@@ -206,6 +280,36 @@ final class SwitcherModel: ObservableObject {
             hits.formUnion(match.positions)
         }
         return (score, hits)
+    }
+
+    /// Like `match`, but a term can also appear unbroken in the tab's address. Matches in the browser name or
+    /// the domain are marked on the second line ("domain · Browser").
+    private static func match(_ terms: [[Character]], in tab: BrowserTab)
+        -> (score: Int, titleHits: Set<Int>, subtitleHits: Set<Int>)? {
+        let titleLength = tab.title.count
+        let domainLength = tab.domain.count
+        var score = 0
+        var titleHits = Set<Int>(), subtitleHits = Set<Int>()
+        for term in terms {
+            let name = Fuzzy.match(term, in: tab.nameText)
+            let address = Fuzzy.substringMatch(term, in: tab.addressText) { !(tab.topLevelDomain?.contains($0) ?? false) }
+            if let name, name.score >= address?.score ?? Int.min {
+                score += name.score
+                for position in name.positions {
+                    if position < titleLength {
+                        titleHits.insert(position)
+                    } else if position > titleLength {
+                        subtitleHits.insert(position - titleLength - 1 + tab.browserNameOffset)
+                    }
+                }
+            } else if let address {
+                score += address.score
+                subtitleHits.formUnion(address.positions.filter { $0 < domainLength })
+            } else {
+                return nil
+            }
+        }
+        return (score, titleHits, subtitleHits)
     }
 }
 
@@ -445,7 +549,7 @@ struct SwitcherView: View {
                 }
             } else if !model.query.isEmpty {
                 separator
-                Text("No matching windows or apps")
+                Text(model.hasTabs ? "No matching windows, tabs or apps" : "No matching windows or apps")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)

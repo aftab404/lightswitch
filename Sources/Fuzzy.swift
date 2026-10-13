@@ -18,18 +18,33 @@ enum Fuzzy {
         String(character).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).first ?? character
     }
 
+    /// Text prepared for matching once, for lists searched on every keystroke (a few hundred browser tabs).
+    struct Text {
+        let normalized: [Character]
+        let bonus: [Int]
+
+        init(_ characters: [Character]) {
+            normalized = characters.map(Fuzzy.normalized)
+            bonus = characters.indices.map { Fuzzy.boundaryBonus(characters, $0) }
+        }
+    }
+
     static func match(_ pattern: [Character], in text: [Character]) -> Match? {
-        let n = text.count, m = pattern.count
+        match(pattern, in: Text(text))
+    }
+
+    static func match(_ pattern: [Character], in text: Text) -> Match? {
+        let n = text.normalized.count, m = pattern.count
         guard m > 0 else { return Match(score: 0, positions: []) }
         guard m <= n else { return nil }
 
         let pattern = pattern.map(normalized)
-        let lower = text.map(normalized)
+        let lower = text.normalized
         var k = 0
         for c in lower where k < m && c == pattern[k] { k += 1 }
         guard k == m else { return nil }
 
-        let bonus = (0..<n).map { boundaryBonus(text, $0) }
+        let bonus = text.bonus
         let none = Int.min / 2
         // score[i][j]: best score with pattern[i] matched at text[j]; back[i][j]: where pattern[i-1] matched.
         var score = [[Int]](repeating: [Int](repeating: none, count: n), count: m)
@@ -78,6 +93,29 @@ enum Fuzzy {
             j = back[i][j]
         }
         return Match(score: best, positions: positions)
+    }
+
+    /// Where `pattern` appears unbroken in `text`, scored the way `match` scores such a run. For text like web
+    /// addresses, where a few letters scattered through a long path would match almost anything.
+    /// `allowedStart` can rule out runs starting at some positions.
+    static func substringMatch(_ pattern: [Character], in text: Text, allowedStart: (Int) -> Bool = { _ in true }) -> Match? {
+        let n = text.normalized.count, m = pattern.count
+        guard m > 0 else { return Match(score: 0, positions: []) }
+        guard m <= n else { return nil }
+
+        let pattern = pattern.map(normalized)
+        var best: Match?
+        for start in 0...(n - m) where text.normalized[start] == pattern[0] && allowedStart(start) {
+            guard (1..<m).allSatisfy({ text.normalized[start + $0] == pattern[$0] }) else { continue }
+            var score = matchScore + text.bonus[start] * firstCharMultiplier
+            for j in start + 1 ..< start + m {
+                score += matchScore + max(text.bonus[j], consecutiveBonus)
+            }
+            if score > best?.score ?? Int.min {
+                best = Match(score: score, positions: Array(start ..< start + m))
+            }
+        }
+        return best
     }
 
     private static func boundaryBonus(_ text: [Character], _ j: Int) -> Int {

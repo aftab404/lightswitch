@@ -20,6 +20,8 @@
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Lightswitch reads the tabs open in your browser so you can search them and switch to one.</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSHighResolutionCapable</key>

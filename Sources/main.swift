@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         panel = SwitcherPanel(model: model)
         model.onConfirm = { [weak self] item in self?.confirm(item) }
+        model.onSwitchToTab = { [weak self] tab, window in self?.switchTo(tab, window: window) }
         model.onOpen = { [weak self] app in self?.open(app) }
         model.onCancel = { [weak self] in self?.hide() }
         model.onHeightChange = { [weak self] height in self?.resize(to: height) }
@@ -40,6 +41,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.model.apps = InstalledApps.launchable
         }
         InstalledApps.refreshIfStale()
+        BrowserTabs.onUpdate = { [weak self] pid, tabs in
+            // Possibly from a read started by an earlier opening that took a while; it's still recent.
+            guard let self, self.panel.isVisible else { return }
+            self.model.setTabs(tabs, of: pid)
+        }
         setUpStatusItem()
         syncLoginItem()
 
@@ -85,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         model.apps = InstalledApps.launchable
         InstalledApps.refreshIfStale()
+        BrowserTabs.refresh()
         let opening = model.showCount
         WindowList.fetch { [weak self] items in
             // A slower fetch from an earlier opening mustn't replace this one's list.
@@ -100,6 +107,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func confirm(_ item: WindowItem) {
         hide()
         WindowList.focus(item)
+    }
+
+    private func switchTo(_ tab: BrowserTab, window: WindowItem?) {
+        hide()
+        BrowserTabs.select(tab) {
+            // Once the browser has put the tab's window in front of its others, so its front window is that one.
+            WindowList.focus(window ?? WindowList.frontWindow(of: tab.pid))
+        }
     }
 
     private func open(_ app: InstalledApp) {

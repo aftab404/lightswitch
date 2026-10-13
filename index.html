@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lightswitch: flip to any window</title>
-<meta name="description" content="Lightswitch is a featherweight, Spotlight-style window switcher for macOS that opens apps too. Press ⌘Space, type a few letters of any window's title or app's name, and you're there.">
+<meta name="description" content="Lightswitch is a featherweight, Spotlight-style window switcher for macOS that finds browser tabs and opens apps too. Press ⌘Space, type a few letters of any window, tab or app, and you're there.">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon-512.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Lightswitch: flip to any window">
-<meta property="og:description" content="A featherweight, Spotlight-style window switcher for macOS that opens apps too. ⌘Space, a few letters, Return.">
+<meta property="og:description" content="A featherweight, Spotlight-style window switcher for macOS that finds browser tabs and opens apps too. ⌘Space, a few letters, Return.">
 <meta property="og:url" content="https://aftab404.github.io/lightswitch/">
 <meta property="og:image" content="https://aftab404.github.io/lightswitch/assets/icon-512.png">
 <meta name="twitter:card" content="summary">
@@ -232,7 +232,7 @@
   .app-icon svg { width: 19px; height: 19px; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
   .row-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
   .row-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row-app { font-size: 11.5px; opacity: 0.6; }
+  .row-app { font-size: 11.5px; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .row.selected .row-app { opacity: 0.85; }
   .row b { font-weight: 700; }
   .section-title { padding: 9px 10px 5px; font-size: 11px; font-weight: 600; color: var(--panel-muted); }
@@ -404,7 +404,7 @@
       <img class="hero-icon" src="assets/icon-512.png" alt="Lightswitch app icon: a wall light switch flipped on">
       <p class="eyebrow">A window switcher for macOS</p>
       <h1>Flip to any window.</h1>
-      <p class="lede">Lightswitch is a featherweight, Spotlight-style window switcher that opens apps too. Press ⌘Space, type a few letters of any window's title or app's name, and hit Return. That's it.</p>
+      <p class="lede">Lightswitch is a featherweight, Spotlight-style window switcher that finds browser tabs and opens apps too. Press ⌘Space, type a few letters of any window, tab or app, and hit Return. That's it.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
@@ -476,8 +476,8 @@
 
       <div class="details">
         <div class="detail">
-          <h4><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 8h18M8 21h8"/></svg>Every window, every app</h4>
-          <p>Lists the titles of all open windows across your apps, including minimized windows and hidden apps. Apps that aren't running yet show up below them, ready to open.</p>
+          <h4><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 8h18M8 21h8"/></svg>Every window, tab and app</h4>
+          <p>Lists the titles of all open windows across your apps, including minimized windows and hidden apps. As you type, it searches the tabs open in Chrome, Safari, Brave, Arc, Edge and Vivaldi too. Apps that aren't running yet show up below, ready to open.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Back and forth</h4>
@@ -489,11 +489,11 @@
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M4 7h10M4 12h16M4 17h7"/><circle cx="18" cy="7" r="2"/></svg>Multi-word search</h4>
-          <p>Separate terms with spaces and every one must match, across the window title and the app name.</p>
+          <p>Separate terms with spaces and every one must match, across the window title and the app name, or a tab's title, address and browser.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Private by design</h4>
-          <p>No accounts, no analytics, no network requests. Window titles are read locally and never leave your Mac.</p>
+          <p>No accounts, no analytics, no network requests. Window titles and tabs are read locally and never leave your Mac.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M3 12h3M18 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg>Out of the way</h4>
@@ -510,10 +510,10 @@
       </div>
       <dl class="keys">
         <div class="key-row"><dt><kbd>⌘</kbd><kbd>Space</kbd></dt><dd>Open or close Lightswitch</dd></div>
-        <div class="key-row"><dt><kbd>a–z</kbd></dt><dd>Filter windows and apps as you type</dd></div>
+        <div class="key-row"><dt><kbd>a–z</kbd></dt><dd>Filter windows, tabs and apps as you type</dd></div>
         <div class="key-row"><dt><kbd>⇥</kbd><span class="or">or</span><kbd>↓</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>N</kbd></dt><dd>Next result</dd></div>
         <div class="key-row"><dt><kbd>⇧</kbd><kbd>⇥</kbd><span class="or">or</span><kbd>↑</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>P</kbd></dt><dd>Previous result</dd></div>
-        <div class="key-row"><dt><kbd>↩</kbd></dt><dd>Jump to the window, or open the app</dd></div>
+        <div class="key-row"><dt><kbd>↩</kbd></dt><dd>Jump to the window or tab, or open the app</dd></div>
         <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Clear the query, then close</dd></div>
       </dl>
     </section>
@@ -572,6 +572,14 @@ cd lightswitch
         <details>
           <summary>Can it open apps, like Spotlight?</summary>
           <p>Yes. Type a few letters of an app's name and the ones that aren't running yet appear under Applications, below any matching windows. Tab or the arrow keys move between both, and Return opens the app. Lightswitch looks in <span class="path">/Applications</span>, <span class="path">/System/Applications</span> and <span class="path">~/Applications</span>, including folders one level down such as Utilities, and notices newly installed apps the next time you open it.</p>
+        </details>
+        <details>
+          <summary>Can it switch browser tabs?</summary>
+          <p>Yes, in Chrome, Safari, Brave, Arc, Microsoft Edge, Vivaldi and Chromium. Start typing and their tabs are listed in place of their windows (a browser window's row is just its current tab). A tab matches on its title or its address, so <code>jira</code> finds your Jira board even when its title doesn't say Jira. Return makes that tab current, brings its window to the front and switches to the browser. Lightswitch only reads browsers that are already running and never launches one. Firefox can't be supported: it gives other apps no access to its tabs.</p>
+        </details>
+        <details>
+          <summary>Why does macOS ask to let Lightswitch control my browser?</summary>
+          <p>Browsers only share their tabs through Apple Events, the system behind AppleScript, and macOS asks once per browser before an app may send them. Click <span class="path">Allow</span> to search that browser's tabs. If you'd rather not, click <span class="path">Don't Allow</span>: its windows are still listed as usual. You can change your mind in <span class="path">System Settings → Privacy &amp; Security → Automation → Lightswitch</span>. Lightswitch is ad-hoc signed, so, as with Accessibility, macOS ties your answer to that exact build and asks again after each update. If you build from source, a "Lightswitch Dev" code signing certificate makes the answer stick across rebuilds.</p>
         </details>
         <details>
           <summary>Can I keep Spotlight?</summary>
@@ -658,6 +666,12 @@ cd lightswitch
     { title: "Downloads", app: "Finder", icon: "finder" },
     { title: "README.md", app: "TextEdit", icon: "textedit" }
   ];
+  // Safari's tabs. As in the app, they're listed in place of Safari's window rows while typing.
+  var TABS = [
+    { title: "Pull requests · aftab404/lightswitch", domain: "github.com", path: "/aftab404/lightswitch/pulls" },
+    { title: "Sprint board - Agile board", domain: "acme.atlassian.net", path: "/jira/software/projects/WEB/boards/4" },
+    { title: "Flights to Lisbon", domain: "google.com", path: "/travel/flights" }
+  ];
   // Installed apps that aren't running, listed under Applications below the windows.
   var APPS = [
     { title: "Maps", app: "/System/Applications", icon: "maps", badge: "Open" },
@@ -725,6 +739,18 @@ cd lightswitch
     return { score: best, positions: positions };
   }
 
+  // Tab addresses only count where the term appears unbroken, scored like fuzzy() scores such a run.
+  function substring(pattern, text, allowedStart) {
+    var lower = text.toLowerCase(), best = null;
+    for (var s = lower.indexOf(pattern); s >= 0; s = lower.indexOf(pattern, s + 1)) {
+      if (!allowedStart(s)) continue;
+      var score = 16 + boundaryBonus(text, s) * 2, positions = [s];
+      for (var j = s + 1; j < s + pattern.length; j++) { score += 16 + Math.max(boundaryBonus(text, j), 4); positions.push(j); }
+      if (!best || score > best.score) best = { score: score, positions: positions };
+    }
+    return best;
+  }
+
   function search(query) {
     var terms = query.toLowerCase().split(/\s+/).filter(Boolean);
     if (!terms.length) {
@@ -743,11 +769,34 @@ cd lightswitch
     function byScore(a, b) { return b.score - a.score || a.index - b.index; }
     var found = [], apps = [];
     WINDOWS.forEach(function (w, index) {
+      if (w.app === "Safari") return; // listed as its tabs instead
       var match = matchAll(w.title + " " + w.app);
       if (!match) return;
       var tl = w.title.length, titleHits = new Set(), appHits = new Set();
       match.hits.forEach(function (p) { if (p < tl) titleHits.add(p); else if (p > tl) appHits.add(p - tl - 1); });
       found.push({ w: w, index: index, score: match.score, titleHits: titleHits, appHits: appHits });
+    });
+    TABS.forEach(function (t, index) {
+      var name = t.title + " Safari", address = t.domain + t.path, tld = t.domain.lastIndexOf(".");
+      var subtitle = t.domain + " · Safari", total = 0, titleHits = new Set(), appHits = new Set();
+      // Not ".com": a term starting in the top-level domain would match nearly every tab.
+      function allowed(s) { return tld < 0 || s < tld || s >= t.domain.length; }
+      for (var k = 0; k < terms.length; k++) {
+        var byName = fuzzy(terms[k], name), byAddress = substring(terms[k], address, allowed);
+        if (byName && (!byAddress || byName.score >= byAddress.score)) {
+          total += byName.score;
+          byName.positions.forEach(function (p) {
+            if (p < t.title.length) titleHits.add(p);
+            else if (p > t.title.length) appHits.add(p - t.title.length - 1 + t.domain.length + 3);
+          });
+        } else if (byAddress) {
+          total += byAddress.score;
+          byAddress.positions.forEach(function (p) { if (p < t.domain.length) appHits.add(p); });
+        } else {
+          return;
+        }
+      }
+      found.push({ w: { title: t.title, app: subtitle, icon: "safari" }, index: WINDOWS.length + index, score: total, titleHits: titleHits, appHits: appHits });
     });
     APPS.forEach(function (a, index) {
       var match = matchAll(a.title);
@@ -824,6 +873,7 @@ cd lightswitch
     { query: "rdmp" },
     { query: "notes", tabs: 1 },
     { query: "map", tabs: 1 },
+    { query: "jira" },
     { query: "pr light" },
     { query: "zsh" },
     { query: "dsgn" }

@@ -173,6 +173,15 @@ enum WindowList {
         }
     }
 
+    /// The app's front window as a row `focus` can raise, or an app-only row if Accessibility can't see one.
+    static func frontWindow(of pid: pid_t) -> WindowItem {
+        let app = NSRunningApplication(processIdentifier: pid)
+        let info = AppInfo(pid: pid, name: app?.localizedName ?? "Unknown", isHidden: app?.isHidden ?? false, recency: 0)
+        return windows(of: info).first?.item
+            ?? WindowItem(id: "app-\(pid)", pid: pid, appName: info.name, title: "",
+                          element: nil, isMinimized: false, isAppHidden: info.isHidden)
+    }
+
     private static func attribute(_ element: AXUIElement, _ name: String) -> AnyObject? {
         var value: CFTypeRef?
         guard AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success else { return nil }
