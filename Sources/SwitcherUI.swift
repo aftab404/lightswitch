@@ -201,6 +201,15 @@ final class SwitcherPanel: NSPanel {
 
     override var canBecomeKey: Bool { true }
 
+    /// Puts the caret in the search field before the panel appears. Doing it a frame or two after
+    /// made the placeholder visibly redraw on every open. An editing session that's still going from
+    /// last time is left alone, since restarting it causes the same redraw.
+    func focusSearchField() {
+        contentView?.layoutSubtreeIfNeeded() // lets SwiftUI create the field on the first open
+        guard let field = contentView?.firstDescendant(ofType: SearchTextField.self), field.currentEditor() == nil else { return }
+        makeFirstResponder(field)
+    }
+
     /// Positions the window so the card itself (not the shadow margin) lands on `cardFrame`.
     func setCardFrame(_ cardFrame: NSRect) {
         setFrame(cardFrame.insetBy(dx: -Layout.shadowMargin, dy: -Layout.shadowMargin), display: true)
@@ -296,6 +305,15 @@ private final class CardContainerView: NSView {
     }
 }
 
+private extension NSView {
+    func firstDescendant<T: NSView>(ofType type: T.Type) -> T? {
+        for subview in subviews {
+            if let match = subview as? T ?? subview.firstDescendant(ofType: type) { return match }
+        }
+        return nil
+    }
+}
+
 // MARK: Views
 
 struct SwitcherView: View {
@@ -307,7 +325,7 @@ struct SwitcherView: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.secondary)
-                SearchField(text: $model.query, focusToken: model.showCount, onCommand: model.handle)
+                SearchField(text: $model.query, onCommand: model.handle)
             }
             .padding(.horizontal, 20)
             .frame(height: Layout.searchHeight)
@@ -429,14 +447,18 @@ struct ResultRow: View {
     }
 }
 
+/// The panel's search box. A subclass so the panel can find it to focus it.
+final class SearchTextField: NSTextField {
+    override var allowsVibrancy: Bool { false }
+}
+
 /// AppKit text field so we get Tab / arrows / Return / Esc as editing commands before the field eats them.
 struct SearchField: NSViewRepresentable {
     @Binding var text: String
-    var focusToken: Int
     var onCommand: (Selector) -> Bool
 
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
+    func makeNSView(context: Context) -> SearchTextField {
+        let field = SearchTextField()
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
@@ -449,20 +471,15 @@ struct SearchField: NSViewRepresentable {
         return field
     }
 
-    func updateNSView(_ field: NSTextField, context: Context) {
+    func updateNSView(_ field: SearchTextField, context: Context) {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
-        if context.coordinator.focusToken != focusToken {
-            context.coordinator.focusToken = focusToken
-            DispatchQueue.main.async { field.window?.makeFirstResponder(field) }
-        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: SearchField
-        var focusToken = -1
 
         init(_ parent: SearchField) { self.parent = parent }
 

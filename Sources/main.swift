@@ -67,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // The panel never activates Lightswitch, so the frontmost app is still the one the user was in.
         model.prepareForShow(currentApp: NSWorkspace.shared.frontmostApplication?.processIdentifier)
         resize(to: model.height)
+        panel.focusSearchField()
         panel.makeKeyAndOrderFront(nil)
 
         if let items {
