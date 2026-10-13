@@ -4,10 +4,16 @@ import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private static let shortcut = (keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey))
+    private static let loginItemOffKey = "launchAtLoginTurnedOff"
+    private static let loginItemPathKey = "launchAtLoginPath"
+
     private let model = SwitcherModel()
     private var panel: SwitcherPanel!
     private var hotKey: HotKey?
+    private var shortcutWatch: Timer?
     private var statusItem: NSStatusItem!
+    private var shortcutItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var accessibilityItem: NSMenuItem!
     private var panelX: CGFloat = 0
@@ -23,12 +29,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // `./build.sh demo`: play a scripted session with sample windows for screen recordings.
         Demo.run(app: self)
         #else
-        hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey)) { [weak self] in self?.toggle() }
+        registerHotKey()
         WindowList.startTrackingRecency()
         setUpStatusItem()
-        setUpLoginItemOnFirstLaunch()
+        syncLoginItem()
 
         Accessibility.requestIfNeeded()
+        checkShortcut()
         if CommandLine.arguments.contains("--show") { show() }
         #endif
     }
@@ -57,7 +64,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panelX = screen.visibleFrame.midX - Layout.width / 2
         panelTop = Layout.cardTop(on: screen)
 
-        model.prepareForShow()
+        // The panel never activates Lightswitch, so the frontmost app is still the one the user was in.
+        model.prepareForShow(currentApp: NSWorkspace.shared.frontmostApplication?.processIdentifier)
         resize(to: model.height)
         panel.makeKeyAndOrderFront(nil)
 
@@ -65,8 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             model.items = items
             return
         }
+        let opening = model.showCount
         WindowList.fetch { [weak self] items in
-            guard let self, self.panel.isVisible else { return }
+            // A slower fetch from an earlier opening mustn't replace this one's list.
+            guard let self, self.panel.isVisible, self.model.showCount == opening else { return }
             self.model.items = items
         }
     }
@@ -84,6 +94,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.setCardFrame(NSRect(x: panelX, y: panelTop - height, width: Layout.width, height: height))
     }
 
+    // MARK: Shortcut
+
+    private func registerHotKey() {
+        hotKey = nil // unregister the old one first
+        hotKey = HotKey(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) { [weak self] in self?.toggle() }
+    }
+
+    /// macOS's own shortcuts beat ours, so if Spotlight still has ⌘Space, say so and take it over once it's freed.
+    private func checkShortcut() {
+        guard HotKey.isTakenBySystem(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) else { return }
+        shortcutItem.isHidden = false
+        DispatchQueue.main.async { self.showShortcutAlert() }
+
+        shortcutWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
+            MainActor.assumeIsolated {
+                guard let self, !HotKey.isTakenBySystem(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) else { return }
+                timer.invalidate()
+                self.shortcutItem.isHidden = true
+                self.registerHotKey()
+            }
+        }
+    }
+
+    @objc private func showShortcutAlert() {
+        let alert = NSAlert()
+        alert.messageText = "⌘Space is still used by Spotlight"
+        alert.informativeText = "macOS gives its own shortcuts priority, so Lightswitch can't open with ⌘Space yet. "
+            + "In Keyboard Shortcuts → Spotlight, turn off “Show Spotlight search” or give it another shortcut. "
+            + "Lightswitch takes over ⌘Space as soon as it's free."
+        alert.addButton(withTitle: "Open Keyboard Settings")
+        alert.addButton(withTitle: "Not Now")
+        NSApp.activate()
+        if alert.runModal() == .alertFirstButtonReturn {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+        }
+    }
+
     // MARK: Menu bar
 
     private func setUpStatusItem() {
@@ -98,7 +145,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(showItem)
         menu.addItem(.separator())
 
-        accessibilityItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(openAccessibilitySettings), keyEquivalent: "")
+        shortcutItem = NSMenuItem(title: "⌘Space Is Used by Spotlight…", action: #selector(showShortcutAlert), keyEquivalent: "")
+        shortcutItem.target = self
+        shortcutItem.isHidden = true
+        menu.addItem(shortcutItem)
+
+        accessibilityItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(requestAccessibility), keyEquivalent: "")
         accessibilityItem.target = self
         menu.addItem(accessibilityItem)
 
@@ -115,28 +167,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         accessibilityItem.isHidden = Accessibility.isTrusted
     }
 
-    @objc private func openAccessibilitySettings() {
-        Accessibility.openSettings()
+    @objc private func requestAccessibility() {
+        Accessibility.requestAgain()
     }
 
+    // MARK: Login item
+
     @objc private func toggleLoginItem() {
+        let service = SMAppService.mainApp
+        let turnOn = service.status != .enabled
+        UserDefaults.standard.set(!turnOn, forKey: Self.loginItemOffKey)
         do {
-            if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
+            if turnOn {
+                try service.register()
+                UserDefaults.standard.set(Bundle.main.bundlePath, forKey: Self.loginItemPathKey)
             } else {
-                try SMAppService.mainApp.register()
+                try service.unregister()
             }
         } catch {
             NSLog("Lightswitch: login item change failed: \(error)")
         }
     }
 
-    // The point of the app is to own ⌘Space, so it starts at login unless turned off from the menu.
-    private func setUpLoginItemOnFirstLaunch() {
-        let key = "didSetUpLoginItem"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
-        try? SMAppService.mainApp.register()
+    /// The point of the app is to own ⌘Space, so it starts at login unless turned off from the menu.
+    /// Only an installed copy registers: one running from the disk image, Downloads or a translocated
+    /// path would leave login pointing at a copy that's about to disappear. Runs on every launch, so
+    /// moving the app re-points the login item.
+    private func syncLoginItem() {
+        let defaults = UserDefaults.standard
+        guard isInstalledCopy, !defaults.bool(forKey: Self.loginItemOffKey) else { return }
+        let service = SMAppService.mainApp
+        let path = Bundle.main.bundlePath
+        if service.status == .enabled {
+            guard defaults.string(forKey: Self.loginItemPathKey) != path else { return }
+            try? service.unregister() // registered from another copy
+        }
+        do {
+            try service.register()
+            defaults.set(path, forKey: Self.loginItemPathKey)
+        } catch {
+            NSLog("Lightswitch: could not register the login item: \(error)")
+        }
+    }
+
+    private var isInstalledCopy: Bool {
+        let path = Bundle.main.bundleURL.resolvingSymlinksInPath().path
+        let userApplications = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications").path
+        return path.hasPrefix("/Applications/") || path.hasPrefix(userApplications + "/")
     }
 }
 

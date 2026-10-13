@@ -105,8 +105,10 @@ enum Demo {
         ]
         // Any element will do: sample rows are never focused, and nil would mark them as app-only rows.
         let placeholder = AXUIElementCreateApplication(getpid())
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0
         return samples.enumerated().map { index, sample in
-            WindowItem(id: "demo-\(index)", pid: 0, appName: sample.app, title: sample.title,
+            // Giving the top row the frontmost app's pid makes it "the window you're in", as in real use.
+            WindowItem(id: "demo-\(index)", pid: index == 0 ? frontmost : 0, appName: sample.app, title: sample.title,
                        element: placeholder, isMinimized: sample.minimized, isAppHidden: false,
                        icon: icon(of: sample.path))
         }

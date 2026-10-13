@@ -21,8 +21,19 @@ enum Accessibility {
         _ = AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)
     }
 
-    static func openSettings() {
-        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+    /// After an update, macOS keeps the old build's entry in the Accessibility list, still switched on but
+    /// no longer matching this build, and won't prompt again. Clearing our own entry makes it ask afresh.
+    static func requestAgain() {
+        let reset = Process()
+        reset.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        reset.arguments = ["reset", "Accessibility", Bundle.main.bundleIdentifier ?? "com.aftabkhan.lightswitch"]
+        do {
+            try reset.run()
+            reset.waitUntilExit()
+        } catch {
+            NSLog("Lightswitch: could not reset the Accessibility entry: \(error)")
+        }
+        requestIfNeeded()
     }
 }
 
@@ -138,11 +149,13 @@ enum WindowList {
     }
 
     private static func windows(of app: AppInfo) -> [(item: WindowItem, windowID: CGWindowID)] {
+        // Don't let a hung app stall the switcher. The timeout is per element, so every window gets one too.
         let axApp = AXUIElementCreateApplication(app.pid)
-        AXUIElementSetMessagingTimeout(axApp, 0.3) // don't let a hung app stall the switcher
+        AXUIElementSetMessagingTimeout(axApp, 0.3)
         guard let windows = attribute(axApp, kAXWindowsAttribute) as? [AXUIElement] else { return [] }
 
         return windows.enumerated().compactMap { index, window in
+            AXUIElementSetMessagingTimeout(window, 0.3)
             let subrole = attribute(window, kAXSubroleAttribute) as? String
             guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else { return nil }
             var windowID: CGWindowID = 0
@@ -177,8 +190,17 @@ enum WindowList {
             AXUIElementSetAttributeValue(window, kAXMainAttribute as CFString, kCFBooleanTrue)
             AXUIElementPerformAction(window, kAXRaiseAction as CFString)
         }
-        // Our panel never activates Lightswitch, so ask via AX as well as the normal route.
-        AXUIElementSetAttributeValue(AXUIElementCreateApplication(item.pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue)
+        // Our panel never activates Lightswitch, and macOS may ignore activation requests from an app that
+        // isn't active. Accessibility can make the app frontmost directly; without it, go through Launch
+        // Services, the same route as clicking the app in the Dock.
+        let madeFrontmost = AXUIElementSetAttributeValue(
+            AXUIElementCreateApplication(item.pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue
+        ) == .success
+        if !madeFrontmost, let url = app?.bundleURL {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = true
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration)
+        }
         app?.activate()
 
         // Some apps reshuffle their windows on activation; raise once more after it settles.

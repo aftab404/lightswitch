@@ -540,7 +540,7 @@
         <div class="step-card">
           <span class="step-num">4</span>
           <h3>Hand over ⌘Space</h3>
-          <p>In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search", then reopen Lightswitch from the menu bar.</p>
+          <p>In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search" or give it another shortcut. Lightswitch takes over ⌘Space as soon as it's free.</p>
         </div>
         <div class="step-card wide">
           <h3>Prefer to build it yourself?</h3>
@@ -579,7 +579,7 @@ cd lightswitch
         </details>
         <details>
           <summary>Why do I have to approve Accessibility again after updating?</summary>
-          <p>macOS ties the permission to the exact build of the app, and each version is a new build. Run <code>tccutil reset Accessibility com.aftabkhan.lightswitch</code>, reopen Lightswitch and approve it again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
+          <p>macOS ties the permission to the exact build of the app, and each version is a new build. Click <span class="path">Allow…</span> in the panel, or <span class="path">Grant Accessibility Access…</span> in the menu bar: it clears the stale entry so macOS asks again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
         </details>
       </div>
     </section>

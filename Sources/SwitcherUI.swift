@@ -45,6 +45,9 @@ final class SwitcherModel: ObservableObject {
     var onCancel: () -> Void = {}
     var onHeightChange: (CGFloat) -> Void = { _ in }
 
+    /// The app that was frontmost when the panel opened. Its top window is the one the user is already in.
+    private var currentAppPID: pid_t?
+
     // Must mirror SwitcherView's layout: each section below the search bar adds a 1pt separator.
     var height: CGFloat {
         var height = Layout.searchHeight
@@ -60,16 +63,17 @@ final class SwitcherModel: ObservableObject {
         return height
     }
 
-    func prepareForShow() {
+    func prepareForShow(currentApp: pid_t?) {
+        currentAppPID = currentApp
         needsAccessibility = !Accessibility.isTrusted
         query = ""
         items = []
         showCount += 1
     }
 
-    func openAccessibilitySettings() {
+    func requestAccessibility() {
         onCancel()
-        Accessibility.openSettings()
+        Accessibility.requestAgain()
     }
 
     func move(_ delta: Int) {
@@ -101,11 +105,12 @@ final class SwitcherModel: ObservableObject {
     }
 
     private func refilter() {
-        let terms = query.split(whereSeparator: \.isWhitespace).map { Array($0.lowercased()) }
+        let terms = query.split(whereSeparator: \.isWhitespace).map { Array($0) }
         if terms.isEmpty {
             results = items.map { Result(item: $0, titleHits: [], appHits: []) }
-            // The first window is the one you're already in, so default to the previous one.
-            selection = results.count > 1 ? 1 : 0
+            // If the top window is the one you're already in, default to the one before it. It isn't when,
+            // say, the desktop has focus or a floating window from another app sits on top.
+            selection = results.count > 1 && results[0].item.pid == currentAppPID ? 1 : 0
         } else {
             var scored: [(score: Int, index: Int, result: Result)] = []
             for (index, item) in items.enumerated() {
@@ -317,7 +322,7 @@ struct SwitcherView: View {
                     Text("Allow Accessibility access to see window titles")
                         .font(.system(size: 13))
                     Spacer(minLength: 8)
-                    Button("Open Settings") { model.openAccessibilitySettings() }
+                    Button("Allow…") { model.requestAccessibility() }
                 }
                 .padding(.horizontal, Layout.listPadding + 10)
                 .frame(height: Layout.rowHeight)

@@ -27,4 +27,17 @@ final class HotKey {
         if let hotKeyRef { UnregisterEventHotKey(hotKeyRef) }
         if let handlerRef { RemoveEventHandler(handlerRef) }
     }
+
+    /// Whether one of macOS's own shortcuts (such as Spotlight's ⌘Space) is enabled on this key combination.
+    /// Those win over app hotkeys, so ours would silently never fire.
+    static func isTakenBySystem(keyCode: UInt32, modifiers: UInt32) -> Bool {
+        var hotKeys: Unmanaged<CFArray>?
+        guard CopySymbolicHotKeys(&hotKeys) == noErr,
+              let entries = hotKeys?.takeRetainedValue() as? [[String: Any]] else { return false }
+        return entries.contains { entry in
+            (entry[kHISymbolicHotKeyEnabled as String] as? Bool) == true
+                && (entry[kHISymbolicHotKeyCode as String] as? Int) == Int(keyCode)
+                && (entry[kHISymbolicHotKeyModifiers as String] as? Int) == Int(modifiers)
+        }
+    }
 }

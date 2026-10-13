@@ -12,13 +12,19 @@ enum Fuzzy {
     private static let consecutiveBonus = 4
     private static let firstCharMultiplier = 2
 
-    /// `pattern` must already be lowercased.
+    /// Case- and accent-insensitive form of a character ("Ü" → "u"). Always one character in, one out,
+    /// so match positions line up with the original text.
+    static func normalized(_ character: Character) -> Character {
+        String(character).folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).first ?? character
+    }
+
     static func match(_ pattern: [Character], in text: [Character]) -> Match? {
         let n = text.count, m = pattern.count
         guard m > 0 else { return Match(score: 0, positions: []) }
         guard m <= n else { return nil }
 
-        let lower = text.map { String($0).lowercased().first ?? $0 }
+        let pattern = pattern.map(normalized)
+        let lower = text.map(normalized)
         var k = 0
         for c in lower where k < m && c == pattern[k] { k += 1 }
         guard k == m else { return nil }

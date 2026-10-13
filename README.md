@@ -28,14 +28,14 @@ You only do this once per version.
 
 This builds `build/Lightswitch.app`, copies it to `~/Applications`, and launches it. It needs the Xcode Command Line Tools (`xcode-select --install`). `./build.sh dmg` builds a universal app and packages it as `build/Lightswitch.dmg` for release. `demo/record.sh` records the demo above with sample windows (it needs Screen Recording permission) and writes `media/lightswitch-demo.mp4` and `.gif`.
 
-Either way, the app runs as a menu bar item and registers itself as a login item on first launch. You can turn that off in the menu.
+Either way, the app runs as a menu bar item and starts at login once it's in an Applications folder. You can turn that off in the menu.
 
 ## One-time setup
 
 1. **Accessibility:** System Settings → Privacy & Security → Accessibility → enable Lightswitch. It needs this to read window titles and raise windows.
-2. **Free up ⌘Space:** System Settings → Keyboard → Keyboard Shortcuts… → Spotlight → uncheck "Show Spotlight search". Then quit and reopen Lightswitch from its menu bar icon.
+2. **Free up ⌘Space:** System Settings → Keyboard → Keyboard Shortcuts… → Spotlight → uncheck "Show Spotlight search", or give Spotlight another shortcut. Lightswitch warns you if Spotlight still has ⌘Space and takes it over as soon as it's free.
 
-The build is ad-hoc signed, so every rebuild changes its signature and macOS drops the Accessibility grant. After a rebuild, run `tccutil reset Accessibility com.aftabkhan.lightswitch`, reopen the app and allow access again. To avoid this, create a self-signed code signing certificate named "Lightswitch Dev" in Keychain Access; `build.sh` uses it automatically.
+The build is ad-hoc signed, so every rebuild changes its signature and macOS drops the Accessibility grant. After a rebuild or an update, choose **Grant Accessibility Access…** from the menu bar icon (or **Allow…** in the panel). It clears the stale entry so macOS asks again. To avoid this, create a self-signed code signing certificate named "Lightswitch Dev" in Keychain Access; `build.sh` uses it automatically.
 
 The icon is drawn by `icon/make-icon.swift`; run `swift icon/make-icon.swift` to regenerate `icon/AppIcon.icns` after changing it.
 
