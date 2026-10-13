@@ -156,7 +156,7 @@
   /* Hero */
   .hero { position: relative; text-align: center; padding: 88px 0 56px; }
   .hero::before {
-    content: ""; position: absolute; left: 50%; top: 40px; width: min(720px, 100vw); height: 520px;
+    content: ""; position: absolute; left: 50%; top: 40px; width: min(720px, 100%); height: 520px;
     transform: translateX(-50%); pointer-events: none;
     background: radial-gradient(closest-side, var(--glow), transparent);
     filter: blur(8px);
@@ -327,8 +327,8 @@
     color: var(--fg); background: var(--bg-elev); box-shadow: inset 0 0 0 1px var(--line);
   }
   .copy:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
-  .requirements { margin-top: 18px; font-size: 14.5px; color: var(--faint); }
-  .requirements code { font-size: 13px; padding: 2px 6px; border-radius: 5px; background: var(--code-bg); color: var(--fg); }
+  .step-card p code, .faq p code { font-size: 0.86em; padding: 2px 6px; border-radius: 5px; background: var(--code-bg); color: var(--fg); }
+  .btn-small { height: 40px; padding: 0 18px; font-size: 15px; margin-top: 18px; }
 
   /* FAQ */
   .faq { max-width: 760px; }
@@ -346,7 +346,7 @@
   /* Closing */
   .closing { text-align: center; padding: 120px 0 40px; position: relative; }
   .closing::before {
-    content: ""; position: absolute; left: 50%; top: 70px; width: min(560px, 100vw); height: 360px; transform: translateX(-50%);
+    content: ""; position: absolute; left: 50%; top: 70px; width: min(560px, 100%); height: 360px; transform: translateX(-50%);
     background: radial-gradient(closest-side, var(--glow), transparent); pointer-events: none;
   }
   .closing > * { position: relative; }
@@ -402,13 +402,16 @@
       <h1>Flip to any window.</h1>
       <p class="lede">Lightswitch is a featherweight, Spotlight-style window switcher. Press ⌘Space, type a few letters of any window's title, and hit Return. That's it.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="#install">Get Lightswitch</a>
+        <a class="btn btn-primary" href="https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg">
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+          Download for Mac
+        </a>
         <a class="btn btn-secondary" href="https://github.com/aftab404/lightswitch">
           <svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
           View on GitHub
         </a>
       </div>
-      <p class="fineprint">Free · Source on GitHub · macOS 14 or later</p>
+      <p class="fineprint">Free · macOS 14 or later · Apple silicon and Intel · <a href="#install">Install guide</a></p>
     </section>
 
     <section class="demo">
@@ -513,33 +516,41 @@
       <div class="section-head">
         <p class="kicker">Install</p>
         <h2>Up and running in a minute.</h2>
-        <p>Lightswitch builds from source with Apple's command line tools, so there's no download to approve and no Gatekeeper warnings.</p>
+        <p>Download the app, or build it from source if you prefer. Either way it takes about a minute.</p>
       </div>
       <div class="install">
-        <div class="step-card wide">
+        <div class="step-card">
           <span class="step-num">1</span>
-          <h3>Build and install</h3>
-          <p>This compiles the app, copies it to <span class="path">~/Applications</span> and starts it.</p>
+          <h3>Download and drag</h3>
+          <p>Open <span class="path">Lightswitch.dmg</span> and drag Lightswitch into Applications. One download for Apple silicon and Intel Macs.</p>
+          <a class="btn btn-primary btn-small" href="https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg">Download Lightswitch.dmg</a>
+        </div>
+        <div class="step-card">
+          <span class="step-num">2</span>
+          <h3>Open it once, then Open Anyway</h3>
+          <p>Lightswitch isn't notarized by Apple yet, so macOS blocks the first launch. Try to open it, then go to <span class="path">System Settings → Privacy &amp; Security</span>, scroll down and click <span class="path">Open Anyway</span>.</p>
+        </div>
+        <div class="step-card">
+          <span class="step-num">3</span>
+          <h3>Allow Accessibility access</h3>
+          <p>macOS only shares window titles through Accessibility. Approve the prompt, or go to <span class="path">System Settings → Privacy &amp; Security → Accessibility</span> and switch on Lightswitch.</p>
+        </div>
+        <div class="step-card">
+          <span class="step-num">4</span>
+          <h3>Hand over ⌘Space</h3>
+          <p>In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search", then reopen Lightswitch from the menu bar.</p>
+        </div>
+        <div class="step-card wide">
+          <h3>Prefer to build it yourself?</h3>
+          <p>You'll need macOS 14 or later and the Xcode Command Line Tools (<code>xcode-select --install</code>). A local build skips the Open Anyway step, then continue from step 3.</p>
           <div class="code">
-            <pre id="install-cmd"><span class="c"># needs macOS 14+ and the Xcode Command Line Tools</span>
-git clone https://github.com/aftab404/lightswitch.git
+            <pre id="install-cmd">git clone https://github.com/aftab404/lightswitch.git
 cd lightswitch
 ./build.sh install</pre>
             <button class="copy" type="button" data-copy="install-cmd">Copy</button>
           </div>
         </div>
-        <div class="step-card">
-          <span class="step-num">2</span>
-          <h3>Allow Accessibility access</h3>
-          <p>macOS only shares window titles through Accessibility. Approve the prompt, or go to <span class="path">System Settings → Privacy &amp; Security → Accessibility</span> and switch on Lightswitch.</p>
-        </div>
-        <div class="step-card">
-          <span class="step-num">3</span>
-          <h3>Hand over ⌘Space</h3>
-          <p>In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search", then reopen Lightswitch from the menu bar.</p>
-        </div>
       </div>
-      <p class="requirements">No command line tools yet? Run <code>xcode-select --install</code> first.</p>
     </section>
 
     <section class="block" id="faq">
@@ -561,8 +572,12 @@ cd lightswitch
           <p>Not yet. macOS's Accessibility API only reports windows on the current Space. Apps whose windows are all elsewhere, or in full screen, still appear as an app row, and choosing one switches to that app.</p>
         </details>
         <details>
-          <summary>Why do I have to approve Accessibility again after rebuilding?</summary>
-          <p>Local builds are signed ad hoc, and macOS ties the permission to the exact build. Run <code>tccutil reset Accessibility com.aftabkhan.lightswitch</code>, reopen the app and approve it again, or create a "Lightswitch Dev" code signing certificate in Keychain Access and <code>build.sh</code> will use it so the permission sticks.</p>
+          <summary>Why does macOS say it can't verify Lightswitch?</summary>
+          <p>Apple only vouches for apps that are notarized, which needs a paid developer account. Lightswitch isn't notarized yet, so macOS asks you to confirm once with Open Anyway in Privacy &amp; Security. The full source is on GitHub, and building it yourself avoids the prompt entirely.</p>
+        </details>
+        <details>
+          <summary>Why do I have to approve Accessibility again after updating?</summary>
+          <p>macOS ties the permission to the exact build of the app, and each version is a new build. Run <code>tccutil reset Accessibility com.aftabkhan.lightswitch</code>, reopen Lightswitch and approve it again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
         </details>
       </div>
     </section>
@@ -571,8 +586,8 @@ cd lightswitch
       <img src="assets/icon-512.png" alt="">
       <h2>Go on, flip it.</h2>
       <div class="cta">
-        <a class="btn btn-primary" href="#install">Get Lightswitch</a>
-        <a class="btn btn-secondary" href="https://github.com/aftab404/lightswitch">View source</a>
+        <a class="btn btn-primary" href="https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg">Download for Mac</a>
+        <a class="btn btn-secondary" href="#install">Install guide</a>
       </div>
     </section>
   </div>

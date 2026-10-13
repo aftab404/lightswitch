@@ -6,13 +6,21 @@
 
 Spotlight-style fuzzy window switcher. Press ⌘Space and start typing a window title or app name. Tab / Shift-Tab (or ↑/↓, ⌃N/⌃P) move the selection, Return jumps to that window, and Esc clears the query or closes the panel.
 
-## Build and install
+## Download
+
+**[Download Lightswitch.dmg](https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg)** (macOS 14 or later, Apple silicon and Intel). Open it and drag Lightswitch into Applications.
+
+The app isn't notarized by Apple yet, so macOS blocks the first launch. Try to open it, then go to System Settings → Privacy & Security, scroll down and click **Open Anyway**.
+
+## Build from source
 
 ```bash
 ./build.sh install
 ```
 
-This builds `build/Lightswitch.app`, copies it to `~/Applications`, and launches it. The app runs as a menu bar item and registers itself as a login item on first launch. You can turn that off in the menu.
+This builds `build/Lightswitch.app`, copies it to `~/Applications`, and launches it. It needs the Xcode Command Line Tools (`xcode-select --install`). `./build.sh dmg` builds a universal app and packages it as `build/Lightswitch.dmg` for release.
+
+Either way, the app runs as a menu bar item and registers itself as a login item on first launch. You can turn that off in the menu.
 
 ## One-time setup
 
