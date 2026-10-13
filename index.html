@@ -183,7 +183,8 @@
   .btn-primary { background: var(--fg); color: var(--bg); }
   .btn-secondary { background: var(--bg-elev); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line), var(--shadow); }
   .btn svg { width: 18px; height: 18px; }
-  .fineprint { margin-top: 16px; font-size: 13px; color: var(--faint); }
+  .fineprint { margin: 16px 0 0; font-size: 13px; color: var(--faint); }
+  .fineprint + .fineprint { margin-top: 4px; }
 
   /* Demo */
   .demo { padding: 24px 0 24px; }
@@ -411,7 +412,8 @@
           View on GitHub
         </a>
       </div>
-      <p class="fineprint">Free · macOS 14 or later · Apple silicon and Intel · <a href="#install">Install guide</a></p>
+      <p class="fineprint">Free and open source (MIT) · macOS 14 or later · Apple silicon and Intel</p>
+      <p class="fineprint">Not notarized yet, so the first launch needs a one-time “Open Anyway”. <a href="#install">How to install</a></p>
     </section>
 
     <section class="demo">
@@ -527,8 +529,8 @@
         </div>
         <div class="step-card">
           <span class="step-num">2</span>
-          <h3>Open it once, then Open Anyway</h3>
-          <p>Lightswitch isn't notarized by Apple yet, so macOS blocks the first launch. Try to open it, then go to <span class="path">System Settings → Privacy &amp; Security</span>, scroll down and click <span class="path">Open Anyway</span>.</p>
+          <h3>Confirm the first launch</h3>
+          <p>Lightswitch isn't notarized by Apple yet, so macOS asks you to confirm once. Open it and click <span class="path">Done</span> on the warning. Then go to <span class="path">System Settings → Privacy &amp; Security</span>, scroll to Security, click <span class="path">Open Anyway</span> next to Lightswitch and confirm with your password or Touch ID.</p>
         </div>
         <div class="step-card">
           <span class="step-num">3</span>
@@ -595,7 +597,7 @@ cd lightswitch
 
 <footer>
   <div class="wrap">
-    <span>Lightswitch, a tiny window switcher for macOS.</span>
+    <span>Lightswitch, a tiny window switcher for macOS. MIT licensed.</span>
     <span>Made by <a href="https://github.com/aftab404">aftab404</a> · <a href="https://github.com/aftab404/lightswitch">Source on GitHub</a></span>
   </div>
 </footer>

@@ -3,15 +3,23 @@
 #   ./build.sh           build for this Mac
 #   ./build.sh install   build, copy to ~/Applications and (re)launch
 #   ./build.sh dmg       build a universal (Apple silicon + Intel) app and package build/Lightswitch.dmg
+#   ./build.sh demo      build build/Lightswitch-demo.app, which plays a scripted session (used by demo/record.sh)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 MODE="${1:-}"
 APP=build/Lightswitch.app
+SOURCES=(Sources/*.swift)
+FLAGS=()
 if [[ "$MODE" == "dmg" ]]; then
     ARCHS=(arm64 x86_64)
 else
     ARCHS=("$(uname -m)")
+fi
+if [[ "$MODE" == "demo" ]]; then
+    APP=build/Lightswitch-demo.app
+    SOURCES+=(demo/Demo.swift)
+    FLAGS=(-D DEMO)
 fi
 
 rm -rf "$APP"
@@ -23,8 +31,9 @@ SLICES=()
 for ARCH in "${ARCHS[@]}"; do
     swiftc -O -swift-version 5 \
         -target "$ARCH-apple-macos14.0" \
+        ${FLAGS[@]+"${FLAGS[@]}"} \
         -o "build/Lightswitch-$ARCH" \
-        Sources/*.swift
+        "${SOURCES[@]}"
     SLICES+=("build/Lightswitch-$ARCH")
 done
 lipo -create "${SLICES[@]}" -output "$APP/Contents/MacOS/Lightswitch"

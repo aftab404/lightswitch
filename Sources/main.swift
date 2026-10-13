@@ -19,6 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.onCancel = { [weak self] in self?.hide() }
         model.onHeightChange = { [weak self] height in self?.resize(to: height) }
 
+        #if DEMO
+        // `./build.sh demo`: play a scripted session with sample windows for screen recordings.
+        Demo.run(app: self)
+        #else
         hotKey = HotKey(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey)) { [weak self] in self?.toggle() }
         WindowList.startTrackingRecency()
         setUpStatusItem()
@@ -26,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         Accessibility.requestIfNeeded()
         if CommandLine.arguments.contains("--show") { show() }
+        #endif
     }
 
     // Launching the app again (Finder, `open`) shows the switcher.
@@ -41,24 +46,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func show() {
-        guard !panel.isVisible else { return }
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
-        let visible = screen.visibleFrame
-        panelX = visible.midX - Layout.width / 2
-        panelTop = visible.maxY - visible.height * 0.22
+        show(on: screen)
+    }
+
+    /// Shows the panel on `screen`, listing `items` if given, otherwise the windows open right now.
+    func show(on screen: NSScreen, items: [WindowItem]? = nil) {
+        guard !panel.isVisible else { return }
+        panelX = screen.visibleFrame.midX - Layout.width / 2
+        panelTop = Layout.cardTop(on: screen)
 
         model.prepareForShow()
         resize(to: model.height)
         panel.makeKeyAndOrderFront(nil)
 
+        if let items {
+            model.items = items
+            return
+        }
         WindowList.fetch { [weak self] items in
             guard let self, self.panel.isVisible else { return }
             self.model.items = items
         }
     }
 
-    private func hide() {
+    func hide() {
         panel.orderOut(nil)
     }
 
@@ -79,7 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let menu = NSMenu()
         menu.delegate = self
-        let showItem = NSMenuItem(title: "Show Switcher", action: #selector(show), keyEquivalent: " ")
+        let showItem = NSMenuItem(title: "Show Switcher", action: #selector(show as () -> Void), keyEquivalent: " ")
         showItem.keyEquivalentModifierMask = .command
         showItem.target = self
         menu.addItem(showItem)

@@ -10,6 +10,11 @@ enum Layout {
     static let cornerRadius: CGFloat = 26
     /// Transparent space around the card inside the window, so our own shadow isn't clipped.
     static let shadowMargin: CGFloat = 40
+
+    /// Where the card's top edge sits on a screen, roughly where Spotlight appears.
+    static func cardTop(on screen: NSScreen) -> CGFloat {
+        screen.visibleFrame.maxY - screen.visibleFrame.height * 0.22
+    }
 }
 
 // MARK: Model

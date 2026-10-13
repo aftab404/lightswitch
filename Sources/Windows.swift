@@ -8,7 +8,13 @@ import ApplicationServices
 private func _AXUIElementGetWindow(_ element: AXUIElement, _ windowID: inout CGWindowID) -> AXError
 
 enum Accessibility {
-    static var isTrusted: Bool { AXIsProcessTrusted() }
+    static var isTrusted: Bool {
+        #if DEMO
+        return true // demo recordings use sample windows and never touch other apps
+        #else
+        return AXIsProcessTrusted()
+        #endif
+    }
 
     /// Shows the system prompt if access hasn't been granted yet.
     static func requestIfNeeded() {
