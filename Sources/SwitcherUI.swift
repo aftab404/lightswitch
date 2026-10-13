@@ -499,6 +499,17 @@ struct SwitcherView: View {
                     .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(.secondary)
                 SearchField(text: $model.query, onCommand: model.handle)
+                    .overlay(alignment: .leading) {
+                        // Drawn by SwiftUI rather than the field: it adapts to whatever is behind the glass, like
+                        // the rows. The field's own placeholder can't, since vibrancy is off there (see SearchTextField).
+                        if model.query.isEmpty {
+                            Text("Switch to window")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.tertiary)
+                                .padding(.leading, 2) // where the field starts its text
+                                .allowsHitTesting(false)
+                        }
+                    }
             }
             .padding(.horizontal, 20)
             .frame(height: Layout.searchHeight)
@@ -636,7 +647,9 @@ struct ResultRow: View {
     }
 }
 
-/// The panel's search box. A subclass so the panel can find it to focus it.
+/// The panel's search box. A subclass so the panel can find it to focus it. Vibrancy is off because the
+/// field's vibrant drawing switched back and forth several times as the glass appeared, which flickered.
+/// The placeholder is drawn by SwitcherView instead, so it still adapts to the background.
 final class SearchTextField: NSTextField {
     override var allowsVibrancy: Bool { false }
 }
@@ -652,7 +665,6 @@ struct SearchField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: 24, weight: .regular)
-        field.placeholderString = "Switch to window"
         field.cell?.wraps = false
         field.cell?.isScrollable = true
         field.cell?.usesSingleLineMode = true
