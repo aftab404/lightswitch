@@ -93,6 +93,10 @@ struct WindowItem: Identifiable {
     let isMinimized: Bool
     let isAppHidden: Bool
     var icon: NSImage?
+    /// 0 for a row that stands for the app.
+    var windowID: CGWindowID = 0
+    /// The window you were in before the one you're in now, which the switcher preselects.
+    var isPrevious = false
 
     var displayTitle: String { title.isEmpty ? appName : title }
 
@@ -107,16 +111,24 @@ struct WindowItem: Identifiable {
 enum WindowList {
     private static var recentPIDs: [pid_t] = []
 
+    /// Follows which app, and which of its windows, you're in. Main thread only.
     static func startTrackingRecency() {
         if let front = NSWorkspace.shared.frontmostApplication {
             recentPIDs = [front.processIdentifier]
+            watchWindows(of: front)
+            recordVisitSoon()
         }
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main
-        ) { note in
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { note in
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             recentPIDs.removeAll { $0 == app.processIdentifier }
             recentPIDs.insert(app.processIdentifier, at: 0)
+            watchWindows(of: app)
+            recordVisitSoon()
+        }
+        center.addObserver(forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main) { note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            stopWatchingWindows(of: app.processIdentifier)
         }
     }
 
@@ -143,10 +155,14 @@ enum WindowList {
             )
         }
         let icons = Dictionary(running.map { ($0.processIdentifier, $0.icon) }, uniquingKeysWith: { a, _ in a })
+        // The panel never activates Lightswitch, so the frontmost app is still the one you're in.
+        let frontmost = NSWorkspace.shared.frontmostApplication.flatMap { $0.processIdentifier == getpid() ? nil : $0 }
+        if let frontmost { watchWindows(of: frontmost) } // in case that failed when it was activated
+        let visited = visits
 
         DispatchQueue.global(qos: .userInteractive).async {
             let stacking = onScreenStackingOrder()
-            var perApp = [[(item: WindowItem, windowID: CGWindowID)]](repeating: [], count: apps.count)
+            var perApp = [[WindowItem]](repeating: [], count: apps.count)
             let lock = NSLock()
             DispatchQueue.concurrentPerform(iterations: apps.count) { i in
                 let found = windows(of: apps[i])
@@ -154,9 +170,12 @@ enum WindowList {
                 perApp[i] = found
                 lock.unlock()
             }
-            let items = arrange(perApp, of: apps, stacking: stacking)
+            var items = arrange(perApp, of: apps, stacking: stacking)
+            let current = frontmost.flatMap { windowYoureIn(of: $0.processIdentifier) }
+            markPrevious(in: &items, current: current?.windowID, visited: visited, apps: apps)
 
             DispatchQueue.main.async {
+                if let current { remember(current) }
                 completion(items.map { item in
                     var item = item
                     item.icon = icons[item.pid] ?? nil
@@ -170,8 +189,7 @@ enum WindowList {
     /// an app's window on another desktop or in full screen comes before the on-screen windows of apps used less
     /// recently, and before its own: it can only be its main window, the one used last. Minimized windows, hidden
     /// apps and apps without windows were put away and stay below all the on-screen windows.
-    private static func arrange(_ perApp: [[(item: WindowItem, windowID: CGWindowID)]], of apps: [AppInfo],
-                                stacking: [CGWindowID: Int]) -> [WindowItem] {
+    private static func arrange(_ perApp: [[WindowItem]], of apps: [AppInfo], stacking: [CGWindowID: Int]) -> [WindowItem] {
         let offScreen = offScreenWindows(notIn: stacking)
         var onScreen: [(z: Int, recency: Int, item: WindowItem)] = []
         // Keyed by app recency, then the app's own row before its windows.
@@ -181,15 +199,15 @@ enum WindowList {
         for (appIndex, app) in apps.enumerated() {
             let found = perApp[appIndex]
             var hasWindowToShow = false
-            for (windowIndex, entry) in found.enumerated() {
+            for (windowIndex, window) in found.enumerated() {
                 let key = (app.recency, 1 + windowIndex)
-                if entry.item.isMinimized || app.isHidden {
-                    putAway.append((key, entry.item))
-                } else if let z = stacking[entry.windowID] {
-                    onScreen.append((z, app.recency, entry.item))
+                if window.isMinimized || app.isHidden {
+                    putAway.append((key, window))
+                } else if let z = stacking[window.windowID] {
+                    onScreen.append((z, app.recency, window))
                     hasWindowToShow = true
                 } else {
-                    elsewhere.append((key, entry.item))
+                    elsewhere.append((key, window))
                     hasWindowToShow = true
                 }
             }
@@ -249,7 +267,7 @@ enum WindowList {
         return windows
     }
 
-    private static func windows(of app: AppInfo) -> [(item: WindowItem, windowID: CGWindowID)] {
+    private static func windows(of app: AppInfo) -> [WindowItem] {
         // Don't let a hung app stall the switcher. The timeout is per element, so every window gets one too.
         let axApp = AXUIElementCreateApplication(app.pid)
         AXUIElementSetMessagingTimeout(axApp, 0.3)
@@ -268,24 +286,28 @@ enum WindowList {
             var windowID: CGWindowID = 0
             _AXUIElementGetWindow(window, &windowID)
             guard windowID == 0 || seen.insert(windowID).inserted else { return nil } // the main window, listed again
-            let item = WindowItem(
-                id: "\(app.pid)-\(windowID)-\(index)",
-                pid: app.pid,
-                appName: app.name,
-                title: attribute(window, kAXTitleAttribute) as? String ?? "",
-                element: window,
-                isMinimized: attribute(window, kAXMinimizedAttribute) as? Bool ?? false,
-                isAppHidden: app.isHidden
-            )
-            return (item, windowID)
+            return row(for: window, windowID: windowID, id: "\(app.pid)-\(windowID)-\(index)", of: app)
         }
+    }
+
+    private static func row(for window: AXUIElement, windowID: CGWindowID, id: String, of app: AppInfo) -> WindowItem {
+        WindowItem(
+            id: id,
+            pid: app.pid,
+            appName: app.name,
+            title: attribute(window, kAXTitleAttribute) as? String ?? "",
+            element: window,
+            isMinimized: attribute(window, kAXMinimizedAttribute) as? Bool ?? false,
+            isAppHidden: app.isHidden,
+            windowID: windowID
+        )
     }
 
     /// The app's front window as a row `focus` can raise, or an app-only row if Accessibility can't see one.
     static func frontWindow(of pid: pid_t) -> WindowItem {
         let app = NSRunningApplication(processIdentifier: pid)
         let info = AppInfo(pid: pid, name: app?.localizedName ?? "Unknown", isHidden: app?.isHidden ?? false, recency: 0)
-        return windows(of: info).first?.item
+        return windows(of: info).first
             ?? WindowItem(id: "app-\(pid)", pid: pid, appName: info.name, title: "",
                           element: nil, isMinimized: false, isAppHidden: info.isHidden)
     }
@@ -326,5 +348,105 @@ enum WindowList {
                 AXUIElementPerformAction(window, kAXRaiseAction as CFString)
             }
         }
+    }
+}
+
+// MARK: The window you came from
+
+extension WindowList {
+    /// A window you were in.
+    private struct Visit {
+        let pid: pid_t
+        let windowID: CGWindowID
+        let element: AXUIElement
+    }
+
+    /// The windows you've been in, most recent first.
+    private static var visits: [Visit] = []
+    private static var observers: [pid_t: AXObserver] = [:]
+    private static var pendingVisit: DispatchWorkItem?
+
+    /// Hears when the app's focused or main window changes, so switching between its windows counts too.
+    private static func watchWindows(of app: NSRunningApplication) {
+        let pid = app.processIdentifier
+        guard observers[pid] == nil, pid != getpid(), app.activationPolicy == .regular else { return }
+        var observer: AXObserver?
+        guard AXObserverCreate(pid, { _, _, _, _ in WindowList.recordVisitSoon() }, &observer) == .success,
+              let observer else { return }
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, 0.3)
+        let added = [kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification].filter {
+            AXObserverAddNotification(observer, axApp, $0 as CFString, nil) == .success
+        }
+        // Without Accessibility access, or while the app is still starting up. Activating it tries again.
+        guard !added.isEmpty else { return }
+        CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+        observers[pid] = observer
+    }
+
+    private static func stopWatchingWindows(of pid: pid_t) {
+        if let observer = observers.removeValue(forKey: pid) {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
+        }
+        visits.removeAll { $0.pid == pid }
+    }
+
+    /// Notes the window you're in once a switch has settled, so its in-between states don't count.
+    private static func recordVisitSoon() {
+        pendingVisit?.cancel()
+        let work = DispatchWorkItem {
+            guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid(),
+                  let visit = windowYoureIn(of: app.processIdentifier) else { return }
+            remember(visit)
+        }
+        pendingVisit = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
+    }
+
+    private static func remember(_ visit: Visit) {
+        visits.removeAll { $0.windowID == visit.windowID }
+        visits.insert(visit, at: 0)
+        if visits.count > 10 { visits.removeLast() }
+    }
+
+    /// The app's focused window, or its main window while a panel or the like has focus.
+    private static func windowYoureIn(of pid: pid_t) -> Visit? {
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, 0.3)
+        for name in [kAXFocusedWindowAttribute, kAXMainWindowAttribute] {
+            guard let value = attribute(axApp, name), CFGetTypeID(value) == AXUIElementGetTypeID() else { continue }
+            let window = value as! AXUIElement
+            AXUIElementSetMessagingTimeout(window, 0.3)
+            let subrole = attribute(window, kAXSubroleAttribute) as? String
+            guard subrole == kAXStandardWindowSubrole || subrole == kAXDialogSubrole else { continue }
+            var windowID: CGWindowID = 0
+            _AXUIElementGetWindow(window, &windowID)
+            if windowID != 0 { return Visit(pid: pid, windowID: windowID, element: window) }
+        }
+        return nil
+    }
+
+    /// Moves the last window you were in, other than `current`, to just below it and marks it to be preselected.
+    /// Windows closed or put away since are passed over. One the list doesn't have, such as another window of the
+    /// same app on another Space, is added: its element still reaches it.
+    private static func markPrevious(in items: inout [WindowItem], current: CGWindowID?, visited: [Visit], apps: [AppInfo]) {
+        for visit in visited where visit.windowID != current {
+            let listed = items.firstIndex { $0.windowID == visit.windowID }
+            guard var previous = listed.map({ items[$0] }) ?? unlistedRow(for: visit, apps: apps),
+                  !previous.isMinimized, !previous.isAppHidden else { continue }
+            if let listed { items.remove(at: listed) }
+            previous.isPrevious = true
+            let below = current.flatMap { id in items.firstIndex { $0.windowID == id } }.map { $0 + 1 } ?? 0
+            items.insert(previous, at: below)
+            return
+        }
+    }
+
+    private static func unlistedRow(for visit: Visit, apps: [AppInfo]) -> WindowItem? {
+        guard let app = apps.first(where: { $0.pid == visit.pid }) else { return nil } // quit since
+        AXUIElementSetMessagingTimeout(visit.element, 0.3)
+        // Closed since? Closing a window usually invalidates its element; it's never ordered in any more.
+        guard attribute(visit.element, kAXRoleAttribute) != nil, OrderedIn.any([visit.windowID]) ?? true else { return nil }
+        return row(for: visit.element, windowID: visit.windowID, id: "\(app.pid)-\(visit.windowID)-visited", of: app)
     }
 }

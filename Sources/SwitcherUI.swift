@@ -201,9 +201,10 @@ final class SwitcherModel: ObservableObject {
         if terms.isEmpty {
             firstAppIndex = nil
             results = items.map { Result($0) }
-            // If the top window is the one you're already in, default to the one before it. It isn't when,
-            // say, the desktop has focus or a floating window from another app sits on top.
-            selection = items.count > 1 && items[0].pid == currentAppPID ? 1 : 0
+            // The window you were in before this one. Not knowing it yet (just after launch), if the top window is the
+            // one you're already in, default to the one below it. It isn't when, say, the desktop has focus or a
+            // floating window from another app sits on top.
+            selection = items.firstIndex(where: \.isPrevious) ?? (items.count > 1 && items[0].pid == currentAppPID ? 1 : 0)
         } else {
             // Equal scores keep windows in stacking order. A browser's tabs go where its front window is,
             // the ones their windows show first.
