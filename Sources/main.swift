@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         panel = SwitcherPanel(model: model)
         model.onConfirm = { [weak self] item in self?.confirm(item) }
+        model.onOpen = { [weak self] app in self?.open(app) }
         model.onCancel = { [weak self] in self?.hide() }
         model.onHeightChange = { [weak self] height in self?.resize(to: height) }
         recorder.onRecord = { [weak self] shortcut in self?.use(shortcut) }
@@ -33,6 +34,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         #else
         registerHotKey()
         WindowList.startTrackingRecency()
+        InstalledApps.onUpdate = { [weak self] in
+            // A rescan that finishes while the panel is open (opening it starts one when the list is stale).
+            guard let self, self.panel.isVisible else { return }
+            self.model.apps = InstalledApps.launchable
+        }
+        InstalledApps.refreshIfStale()
         setUpStatusItem()
         syncLoginItem()
 
@@ -76,6 +83,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             model.items = items
             return
         }
+        model.apps = InstalledApps.launchable
+        InstalledApps.refreshIfStale()
         let opening = model.showCount
         WindowList.fetch { [weak self] items in
             // A slower fetch from an earlier opening mustn't replace this one's list.
@@ -91,6 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func confirm(_ item: WindowItem) {
         hide()
         WindowList.focus(item)
+    }
+
+    private func open(_ app: InstalledApp) {
+        hide()
+        InstalledApps.open(app)
     }
 
     private func resize(to height: CGFloat) {

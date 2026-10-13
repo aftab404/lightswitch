@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lightswitch: flip to any window</title>
-<meta name="description" content="Lightswitch is a featherweight, Spotlight-style window switcher for macOS. Press ⌘Space, type a few letters of any window's title, and you're there.">
+<meta name="description" content="Lightswitch is a featherweight, Spotlight-style window switcher for macOS that opens apps too. Press ⌘Space, type a few letters of any window's title or app's name, and you're there.">
 <link rel="icon" type="image/png" href="assets/favicon.png">
 <link rel="apple-touch-icon" href="assets/icon-512.png">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Lightswitch: flip to any window">
-<meta property="og:description" content="A featherweight, Spotlight-style window switcher for macOS. ⌘Space, a few letters, Return.">
+<meta property="og:description" content="A featherweight, Spotlight-style window switcher for macOS that opens apps too. ⌘Space, a few letters, Return.">
 <meta property="og:url" content="https://aftab404.github.io/lightswitch/">
 <meta property="og:image" content="https://aftab404.github.io/lightswitch/assets/icon-512.png">
 <meta name="twitter:card" content="summary">
@@ -235,6 +235,7 @@
   .row-app { font-size: 11.5px; opacity: 0.6; }
   .row.selected .row-app { opacity: 0.85; }
   .row b { font-weight: 700; }
+  .section-title { padding: 9px 10px 5px; font-size: 11px; font-weight: 600; color: var(--panel-muted); }
   .badge { margin-left: auto; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, currentColor 10%, transparent); opacity: 0.75; }
   .ico-notes { background: linear-gradient(#ffd766, #f5ac2a); stroke: rgba(80, 48, 0, 0.8); }
   .ico-terminal { background: linear-gradient(#4b4b52, #1d1d21); stroke: #e8e8ea; }
@@ -243,6 +244,8 @@
   .ico-preview { background: linear-gradient(#93d8cc, #3b9893); stroke: #fff; }
   .ico-finder { background: linear-gradient(#7fc7ff, #3a83ee); stroke: #fff; }
   .ico-textedit { background: linear-gradient(#f7f7f9, #d6d6dc); stroke: #45454c; }
+  .ico-maps { background: linear-gradient(#a6e39a, #4cb85c); stroke: #fff; }
+  .ico-music { background: linear-gradient(#ff6b81, #f5304f); stroke: #fff; }
 
   .steps { list-style: none; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px 26px; margin: 22px 0 0; padding: 0; }
   .steps li { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--faint); transition: color 0.2s ease; }
@@ -401,7 +404,7 @@
       <img class="hero-icon" src="assets/icon-512.png" alt="Lightswitch app icon: a wall light switch flipped on">
       <p class="eyebrow">A window switcher for macOS</p>
       <h1>Flip to any window.</h1>
-      <p class="lede">Lightswitch is a featherweight, Spotlight-style window switcher. Press ⌘Space, type a few letters of any window's title, and hit Return. That's it.</p>
+      <p class="lede">Lightswitch is a featherweight, Spotlight-style window switcher that opens apps too. Press ⌘Space, type a few letters of any window's title or app's name, and hit Return. That's it.</p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/aftab404/lightswitch/releases/latest/download/Lightswitch.dmg">
           <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
@@ -474,7 +477,7 @@
       <div class="details">
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="3"/><path d="M3 8h18M8 21h8"/></svg>Every window, every app</h4>
-          <p>Lists the titles of all open windows across your apps, including minimized windows and hidden apps.</p>
+          <p>Lists the titles of all open windows across your apps, including minimized windows and hidden apps. Apps that aren't running yet show up below them, ready to open.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Back and forth</h4>
@@ -507,10 +510,10 @@
       </div>
       <dl class="keys">
         <div class="key-row"><dt><kbd>⌘</kbd><kbd>Space</kbd></dt><dd>Open or close Lightswitch</dd></div>
-        <div class="key-row"><dt><kbd>a–z</kbd></dt><dd>Filter windows as you type</dd></div>
-        <div class="key-row"><dt><kbd>⇥</kbd><span class="or">or</span><kbd>↓</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>N</kbd></dt><dd>Next window</dd></div>
-        <div class="key-row"><dt><kbd>⇧</kbd><kbd>⇥</kbd><span class="or">or</span><kbd>↑</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>P</kbd></dt><dd>Previous window</dd></div>
-        <div class="key-row"><dt><kbd>↩</kbd></dt><dd>Jump to the selected window</dd></div>
+        <div class="key-row"><dt><kbd>a–z</kbd></dt><dd>Filter windows and apps as you type</dd></div>
+        <div class="key-row"><dt><kbd>⇥</kbd><span class="or">or</span><kbd>↓</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>N</kbd></dt><dd>Next result</dd></div>
+        <div class="key-row"><dt><kbd>⇧</kbd><kbd>⇥</kbd><span class="or">or</span><kbd>↑</kbd><span class="or">or</span><kbd>⌃</kbd><kbd>P</kbd></dt><dd>Previous result</dd></div>
+        <div class="key-row"><dt><kbd>↩</kbd></dt><dd>Jump to the window, or open the app</dd></div>
         <div class="key-row"><dt><kbd>Esc</kbd></dt><dd>Clear the query, then close</dd></div>
       </dl>
     </section>
@@ -541,7 +544,7 @@
         <div class="step-card">
           <span class="step-num">4</span>
           <h3>Hand over ⌘Space, or pick another</h3>
-          <p>Spotlight uses ⌘Space out of the box. In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search" or give it another shortcut, and Lightswitch takes over ⌘Space as soon as it's free. Rather keep Spotlight? Choose <span class="path">Change Shortcut…</span> from Lightswitch's menu bar icon and press the combination you want, such as ⌥Space.</p>
+          <p>Spotlight uses ⌘Space out of the box. Lightswitch opens apps too, so you keep Spotlight's most common use. In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search" or give it another shortcut, and Lightswitch takes over ⌘Space as soon as it's free. Rather keep Spotlight? Choose <span class="path">Change Shortcut…</span> from Lightswitch's menu bar icon and press the combination you want, such as ⌥Space.</p>
         </div>
         <div class="step-card wide">
           <h3>Prefer to build it yourself?</h3>
@@ -565,6 +568,10 @@ cd lightswitch
         <details>
           <summary>Why does it need Accessibility access?</summary>
           <p>It's the only way macOS lets an app read other apps' window titles and bring a specific window to the front. Lightswitch uses it for exactly that and nothing else.</p>
+        </details>
+        <details>
+          <summary>Can it open apps, like Spotlight?</summary>
+          <p>Yes. Type a few letters of an app's name and the ones that aren't running yet appear under Applications, below any matching windows. Tab or the arrow keys move between both, and Return opens the app. Lightswitch looks in <span class="path">/Applications</span>, <span class="path">/System/Applications</span> and <span class="path">~/Applications</span>, including folders one level down such as Utilities, and notices newly installed apps the next time you open it.</p>
         </details>
         <details>
           <summary>Can I keep Spotlight?</summary>
@@ -651,6 +658,11 @@ cd lightswitch
     { title: "Downloads", app: "Finder", icon: "finder" },
     { title: "README.md", app: "TextEdit", icon: "textedit" }
   ];
+  // Installed apps that aren't running, listed under Applications below the windows.
+  var APPS = [
+    { title: "Maps", app: "/System/Applications", icon: "maps", badge: "Open" },
+    { title: "Music", app: "/System/Applications", icon: "music", badge: "Open" }
+  ];
   var GLYPHS = {
     notes: '<path d="M7 8h10M7 12h10M7 16h6"/>',
     terminal: '<path d="M6 9l3 3-3 3M11.5 15H17"/>',
@@ -658,7 +670,9 @@ cd lightswitch
     mail: '<rect x="5" y="7" width="14" height="10" rx="2"/><path d="M5.5 8l6.5 5 6.5-5"/>',
     preview: '<rect x="5" y="6" width="14" height="12" rx="2"/><path d="M6 16l4-4 3 3 2-2 3 3"/>',
     finder: '<path d="M4.5 8.5a2 2 0 0 1 2-2h3l2 2h6a2 2 0 0 1 2 2v5.5a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z"/>',
-    textedit: '<path d="M8 5h6l4 4v10H8z"/><path d="M14 5v4h4"/>'
+    textedit: '<path d="M8 5h6l4 4v10H8z"/><path d="M14 5v4h4"/>',
+    maps: '<path d="M5 7.5l4.5-2 5 2 4.5-2v11l-4.5 2-5-2-4.5 2z"/><path d="M9.5 5.5v11M14.5 7.5v11"/>',
+    music: '<path d="M10 16.5V7l8-1.5V15"/><circle cx="8" cy="16.5" r="2"/><circle cx="16" cy="15" r="2"/>'
   };
   var MAX_ROWS = 6;
 
@@ -716,21 +730,30 @@ cd lightswitch
     if (!terms.length) {
       return WINDOWS.map(function (w) { return { w: w, titleHits: new Set(), appHits: new Set() }; });
     }
-    var found = [];
-    WINDOWS.forEach(function (w, index) {
-      var haystack = w.title + " " + w.app, total = 0, hits = new Set();
+    function matchAll(text) {
+      var total = 0, hits = new Set();
       for (var t = 0; t < terms.length; t++) {
-        var match = fuzzy(terms[t], haystack);
-        if (!match) return;
+        var match = fuzzy(terms[t], text);
+        if (!match) return null;
         total += match.score;
         match.positions.forEach(function (p) { hits.add(p); });
       }
+      return { score: total, hits: hits };
+    }
+    function byScore(a, b) { return b.score - a.score || a.index - b.index; }
+    var found = [], apps = [];
+    WINDOWS.forEach(function (w, index) {
+      var match = matchAll(w.title + " " + w.app);
+      if (!match) return;
       var tl = w.title.length, titleHits = new Set(), appHits = new Set();
-      hits.forEach(function (p) { if (p < tl) titleHits.add(p); else if (p > tl) appHits.add(p - tl - 1); });
-      found.push({ w: w, index: index, score: total, titleHits: titleHits, appHits: appHits });
+      match.hits.forEach(function (p) { if (p < tl) titleHits.add(p); else if (p > tl) appHits.add(p - tl - 1); });
+      found.push({ w: w, index: index, score: match.score, titleHits: titleHits, appHits: appHits });
     });
-    found.sort(function (a, b) { return b.score - a.score || a.index - b.index; });
-    return found;
+    APPS.forEach(function (a, index) {
+      var match = matchAll(a.title);
+      if (match) apps.push({ w: a, index: index, score: match.score, titleHits: match.hits, appHits: new Set(), isApp: true });
+    });
+    return found.sort(byScore).concat(apps.sort(byScore));
   }
 
   function escapeHTML(s) {
@@ -755,8 +778,10 @@ cd lightswitch
   function render() {
     queryEl.textContent = state.query;
     placeholder.style.visibility = state.query ? "hidden" : "visible";
-    resultsEl.innerHTML = state.results.slice(0, MAX_ROWS).map(function (r, i) {
-      return '<div class="row' + (i === state.selection ? " selected" : "") + '">' +
+    resultsEl.innerHTML = state.results.slice(0, MAX_ROWS).map(function (r, i, shown) {
+      var firstApp = r.isApp && !(i > 0 && shown[i - 1].isApp);
+      return (firstApp ? '<div class="section-title">Applications</div>' : "") +
+        '<div class="row' + (i === state.selection ? " selected" : "") + '">' +
         '<span class="app-icon ico-' + r.w.icon + '"><svg viewBox="0 0 24 24">' + GLYPHS[r.w.icon] + "</svg></span>" +
         '<span class="row-text"><span class="row-title">' + highlight(r.w.title, r.titleHits) + "</span>" +
         '<span class="row-app">' + highlight(r.w.app, r.appHits) + "</span></span>" +
@@ -798,6 +823,7 @@ cd lightswitch
   var SCRIPT = [
     { query: "rdmp" },
     { query: "notes", tabs: 1 },
+    { query: "map", tabs: 1 },
     { query: "pr light" },
     { query: "zsh" },
     { query: "dsgn" }

@@ -5,6 +5,7 @@ enum Layout {
     static let width: CGFloat = 680
     static let searchHeight: CGFloat = 56
     static let rowHeight: CGFloat = 46
+    static let sectionTitleHeight: CGFloat = 28
     static let listPadding: CGFloat = 8
     static let maxVisibleRows = 8
     static let cornerRadius: CGFloat = 26
@@ -22,16 +23,49 @@ enum Layout {
 @MainActor
 final class SwitcherModel: ObservableObject {
     struct Result: Identifiable {
-        let item: WindowItem
-        let titleHits: Set<Int>
-        let appHits: Set<Int>
-        var id: String { item.id }
+        enum Target {
+            case window(WindowItem)
+            case app(InstalledApp)
+        }
+
+        let target: Target
+        let id: String
+        let title: String
+        let subtitle: String
+        let icon: NSImage?
+        let badge: String?
+        var titleHits: Set<Int> = []
+        var subtitleHits: Set<Int> = []
+
+        init(_ item: WindowItem) {
+            target = .window(item)
+            id = item.id
+            title = item.displayTitle
+            subtitle = item.appName
+            icon = item.icon
+            badge = item.badge
+        }
+
+        init(_ app: InstalledApp) {
+            target = .app(app)
+            id = app.path
+            title = app.name
+            subtitle = app.folder
+            icon = InstalledApps.icon(for: app)
+            badge = "Open"
+        }
     }
+
+    /// One or two letters match most installed apps, so only the best few are listed.
+    private static let maxApps = 6
 
     @Published var query = "" {
         didSet { if query != oldValue { refilter() } }
     }
+    /// Matching windows, then matching apps that aren't running.
     @Published private(set) var results: [Result] = []
+    /// Where the apps start in `results`, if any matched.
+    private(set) var firstAppIndex: Int?
     @Published var selection = 0
     @Published private(set) var showCount = 0
     /// Without Accessibility access macOS hides window titles, so only app rows can be listed.
@@ -40,8 +74,13 @@ final class SwitcherModel: ObservableObject {
     var items: [WindowItem] = [] {
         didSet { refilter() }
     }
+    /// Installed apps to offer when the query matches them.
+    var apps: [InstalledApp] = [] {
+        didSet { refilter() }
+    }
 
     var onConfirm: (WindowItem) -> Void = { _ in }
+    var onOpen: (InstalledApp) -> Void = { _ in }
     var onCancel: () -> Void = {}
     var onHeightChange: (CGFloat) -> Void = { _ in }
 
@@ -57,6 +96,10 @@ final class SwitcherModel: ObservableObject {
         let rows = min(results.count, Layout.maxVisibleRows)
         if rows > 0 {
             height += 1 + CGFloat(rows) * Layout.rowHeight + Layout.listPadding * 2
+            // The Applications title, unless it starts below the visible rows.
+            if let firstAppIndex, firstAppIndex < Layout.maxVisibleRows {
+                height += Layout.sectionTitleHeight
+            }
         } else if !query.isEmpty {
             height += 1 + Layout.rowHeight
         }
@@ -83,7 +126,10 @@ final class SwitcherModel: ObservableObject {
 
     func confirm() {
         guard results.indices.contains(selection) else { return }
-        onConfirm(results[selection].item)
+        switch results[selection].target {
+        case .window(let item): onConfirm(item)
+        case .app(let app): onOpen(app)
+        }
     }
 
     /// Keyboard commands from the search field. Returns true when handled.
@@ -107,36 +153,59 @@ final class SwitcherModel: ObservableObject {
     private func refilter() {
         let terms = query.split(whereSeparator: \.isWhitespace).map { Array($0) }
         if terms.isEmpty {
-            results = items.map { Result(item: $0, titleHits: [], appHits: []) }
+            firstAppIndex = nil
+            results = items.map { Result($0) }
             // If the top window is the one you're already in, default to the one before it. It isn't when,
             // say, the desktop has focus or a floating window from another app sits on top.
-            selection = results.count > 1 && results[0].item.pid == currentAppPID ? 1 : 0
+            selection = items.count > 1 && items[0].pid == currentAppPID ? 1 : 0
         } else {
-            var scored: [(score: Int, index: Int, result: Result)] = []
+            var windows: [(score: Int, index: Int, result: Result)] = []
             for (index, item) in items.enumerated() {
                 let title = Array(item.displayTitle)
-                let haystack = title + [" "] + Array(item.appName)
-                var total = 0
-                var hits = Set<Int>()
-                var matchedAll = true
-                for term in terms {
-                    guard let match = Fuzzy.match(term, in: haystack) else { matchedAll = false; break }
-                    total += match.score
-                    hits.formUnion(match.positions)
+                guard let match = Self.match(terms, in: title + [" "] + Array(item.appName)) else { continue }
+                var result = Result(item)
+                result.titleHits = match.hits.filter { $0 < title.count }
+                if item.element != nil { // an app row's title is the app name already
+                    result.subtitleHits = Set(match.hits.filter { $0 > title.count }.map { $0 - title.count - 1 })
                 }
-                guard matchedAll else { continue }
-                let result = Result(
-                    item: item,
-                    titleHits: hits.filter { $0 < title.count },
-                    appHits: Set(hits.filter { $0 > title.count }.map { $0 - title.count - 1 })
-                )
-                scored.append((total, index, result))
+                windows.append((match.score, index, result))
             }
-            scored.sort { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
-            results = scored.map(\.result)
+            windows.sort { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
+
+            var matchedApps: [(score: Int, index: Int, app: InstalledApp, hits: Set<Int>)] = []
+            for (index, app) in apps.enumerated() {
+                guard let match = Self.match(terms, in: app.searchText) else { continue }
+                matchedApps.append((match.score, index, app, match.hits))
+            }
+            matchedApps.sort {
+                if $0.score != $1.score { return $0.score > $1.score }
+                // "Notes" before "Notes Helper"; `apps` is in alphabetical order after that.
+                if $0.app.name.count != $1.app.name.count { return $0.app.name.count < $1.app.name.count }
+                return $0.index < $1.index
+            }
+            let appResults = matchedApps.prefix(Self.maxApps).map { entry in
+                var result = Result(entry.app)
+                result.titleHits = entry.hits.filter { $0 < entry.app.name.count }
+                return result
+            }
+
+            firstAppIndex = appResults.isEmpty ? nil : windows.count
+            results = windows.map(\.result) + appResults
             selection = 0
         }
         onHeightChange(height)
+    }
+
+    /// Every term has to match somewhere in `text`. Adds up their scores and collects the matched positions.
+    private static func match(_ terms: [[Character]], in text: [Character]) -> (score: Int, hits: Set<Int>)? {
+        var score = 0
+        var hits = Set<Int>()
+        for term in terms {
+            guard let match = Fuzzy.match(term, in: text) else { return nil }
+            score += match.score
+            hits.formUnion(match.positions)
+        }
+        return (score, hits)
     }
 }
 
@@ -352,11 +421,17 @@ struct SwitcherView: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             ForEach(Array(model.results.enumerated()), id: \.element.id) { index, result in
-                                ResultRow(result: result, isSelected: index == model.selection)
-                                    .onTapGesture {
-                                        model.selection = index
-                                        model.confirm()
+                                // The title goes with the first app's row, so scrolling to that row shows it too.
+                                VStack(spacing: 0) {
+                                    if index == model.firstAppIndex {
+                                        sectionTitle("Applications")
                                     }
+                                    ResultRow(result: result, isSelected: index == model.selection)
+                                        .onTapGesture {
+                                            model.selection = index
+                                            model.confirm()
+                                        }
+                                }
                             }
                         }
                         .padding(Layout.listPadding)
@@ -370,7 +445,7 @@ struct SwitcherView: View {
                 }
             } else if !model.query.isEmpty {
                 separator
-                Text("No matching windows")
+                Text("No matching windows or apps")
                     .font(.system(size: 14))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
@@ -385,6 +460,16 @@ struct SwitcherView: View {
             .fill(Color(nsColor: .separatorColor))
             .frame(height: 1)
     }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: Layout.sectionTitleHeight, alignment: .bottom)
+    }
 }
 
 struct ResultRow: View {
@@ -393,20 +478,20 @@ struct ResultRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(nsImage: result.item.icon ?? NSWorkspace.shared.icon(for: .applicationBundle))
+            Image(nsImage: result.icon ?? NSWorkspace.shared.icon(for: .applicationBundle))
                 .resizable()
                 .interpolation(.high)
                 .frame(width: 30, height: 30)
             VStack(alignment: .leading, spacing: 1) {
-                Text(highlighted(result.item.displayTitle, hits: result.titleHits, size: 14))
+                Text(highlighted(result.title, hits: result.titleHits, size: 14))
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Text(highlighted(result.item.appName, hits: result.item.element == nil ? [] : result.appHits, size: 11))
+                Text(highlighted(result.subtitle, hits: result.subtitleHits, size: 11))
                     .lineLimit(1)
                     .opacity(isSelected ? 0.85 : 0.55)
             }
             Spacer(minLength: 8)
-            if let badge = result.item.badge {
+            if let badge = result.badge {
                 Text(badge)
                     .font(.system(size: 11, weight: .medium))
                     .padding(.horizontal, 7)
