@@ -1,18 +1,19 @@
 import AppKit
-import Carbon.HIToolbox
 import ServiceManagement
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private static let shortcut = (keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey))
     private static let loginItemOffKey = "launchAtLoginTurnedOff"
     private static let loginItemPathKey = "launchAtLoginPath"
 
     private let model = SwitcherModel()
     private var panel: SwitcherPanel!
+    private var shortcut = Shortcut.saved
     private var hotKey: HotKey?
+    private let recorder = ShortcutRecorder()
     private var shortcutWatch: Timer?
     private var statusItem: NSStatusItem!
+    private var showItem: NSMenuItem!
     private var shortcutItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var accessibilityItem: NSMenuItem!
@@ -24,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.onConfirm = { [weak self] item in self?.confirm(item) }
         model.onCancel = { [weak self] in self?.hide() }
         model.onHeightChange = { [weak self] height in self?.resize(to: height) }
+        recorder.onRecord = { [weak self] shortcut in self?.use(shortcut) }
 
         #if DEMO
         // `./build.sh demo`: play a scripted session with sample windows for screen recordings.
@@ -97,20 +99,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: Shortcut
 
-    private func registerHotKey() {
+    /// Registers `shortcut` with macOS. False if it refused.
+    @discardableResult
+    private func registerHotKey() -> Bool {
         hotKey = nil // unregister the old one first
-        hotKey = HotKey(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) { [weak self] in self?.toggle() }
+        hotKey = HotKey(keyCode: shortcut.keyCode, modifiers: shortcut.modifiers) { [weak self] in
+            // While recording, pressing the current shortcut just keeps it.
+            guard let self, !self.recorder.isVisible else { return }
+            self.toggle()
+        }
+        return hotKey != nil
     }
 
-    /// macOS's own shortcuts beat ours, so if Spotlight still has ⌘Space, say so and take it over once it's freed.
+    /// macOS's own shortcuts beat ours, so if one of them has ours, say so and take it over once it's freed.
     private func checkShortcut() {
-        guard HotKey.isTakenBySystem(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) else { return }
+        guard shortcut.isTakenBySystem else { return }
+        shortcutItem.title = "\(shortcut) Is Used by \(shortcut.systemOwner?.section ?? "a macOS Shortcut")…"
         shortcutItem.isHidden = false
         DispatchQueue.main.async { self.showShortcutAlert() }
 
         shortcutWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
             MainActor.assumeIsolated {
-                guard let self, !HotKey.isTakenBySystem(keyCode: Self.shortcut.keyCode, modifiers: Self.shortcut.modifiers) else { return }
+                guard let self, !self.shortcut.isTakenBySystem else { return }
                 timer.invalidate()
                 self.shortcutItem.isHidden = true
                 self.registerHotKey()
@@ -119,17 +129,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func showShortcutAlert() {
+        let owner = shortcut.systemOwner
+        let fix = owner.map { "In Keyboard Shortcuts → \($0.section), turn off “\($0.name)” or give it another shortcut." }
+            ?? "In Keyboard Shortcuts, turn off the one that uses \(shortcut) or give it another shortcut."
         let alert = NSAlert()
-        alert.messageText = "⌘Space is still used by Spotlight"
-        alert.informativeText = "macOS gives its own shortcuts priority, so Lightswitch can't open with ⌘Space yet. "
-            + "In Keyboard Shortcuts → Spotlight, turn off “Show Spotlight search” or give it another shortcut. "
-            + "Lightswitch takes over ⌘Space as soon as it's free."
+        alert.messageText = "\(shortcut) is still used by \(owner?.section ?? "a macOS shortcut")"
+        alert.informativeText = "macOS gives its own shortcuts priority, so Lightswitch can't open with \(shortcut) yet. \(fix) "
+            + "Lightswitch takes over \(shortcut) as soon as it's free, or you can give Lightswitch a different shortcut."
         alert.addButton(withTitle: "Open Keyboard Settings")
+        alert.addButton(withTitle: "Change Shortcut…")
         alert.addButton(withTitle: "Not Now")
         NSApp.activate()
-        if alert.runModal() == .alertFirstButtonReturn {
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")!)
+        case .alertSecondButtonReturn:
+            changeShortcut()
+        default:
+            break
         }
+    }
+
+    @objc private func changeShortcut() {
+        recorder.show(current: shortcut)
+    }
+
+    /// Makes `new` the global shortcut, or says why it can't be.
+    private func use(_ new: Shortcut) -> String? {
+        if new.isTakenBySystem {
+            let owner = new.systemOwner.map { "\($0.section) (“\($0.name)”)" } ?? "a macOS shortcut"
+            return "\(new) is used by \(owner). Pick another, or turn that one off in Keyboard Shortcuts first."
+        }
+        let old = shortcut
+        shortcut = new
+        guard registerHotKey() else {
+            shortcut = old
+            registerHotKey()
+            return "macOS wouldn't register \(new). Pick another."
+        }
+        new.save()
+        shortcutWatch?.invalidate()
+        shortcutItem.isHidden = true
+        return nil
     }
 
     // MARK: Menu bar
@@ -140,13 +181,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         let menu = NSMenu()
         menu.delegate = self
-        let showItem = NSMenuItem(title: "Show Switcher", action: #selector(show as () -> Void), keyEquivalent: " ")
-        showItem.keyEquivalentModifierMask = .command
+        showItem = NSMenuItem(title: "Show Switcher", action: #selector(show as () -> Void), keyEquivalent: "")
         showItem.target = self
         menu.addItem(showItem)
         menu.addItem(.separator())
 
-        shortcutItem = NSMenuItem(title: "⌘Space Is Used by Spotlight…", action: #selector(showShortcutAlert), keyEquivalent: "")
+        shortcutItem = NSMenuItem(title: "", action: #selector(showShortcutAlert), keyEquivalent: "")
         shortcutItem.target = self
         shortcutItem.isHidden = true
         menu.addItem(shortcutItem)
@@ -154,6 +194,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         accessibilityItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(requestAccessibility), keyEquivalent: "")
         accessibilityItem.target = self
         menu.addItem(accessibilityItem)
+
+        let changeItem = NSMenuItem(title: "Change Shortcut…", action: #selector(changeShortcut), keyEquivalent: "")
+        changeItem.target = self
+        menu.addItem(changeItem)
 
         loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLoginItem), keyEquivalent: "")
         loginItem.target = self
@@ -164,6 +208,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
+        showItem.keyEquivalent = shortcut.keyEquivalent
+        showItem.keyEquivalentModifierMask = shortcut.modifierFlags
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         accessibilityItem.isHidden = Accessibility.isTrusted
     }
@@ -190,7 +236,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// The point of the app is to own ⌘Space, so it starts at login unless turned off from the menu.
+    /// The point of the app is to be one shortcut away, so it starts at login unless turned off from the menu.
     /// Only an installed copy registers: one running from the disk image, Downloads or a translocated
     /// path would leave login pointing at a copy that's about to disappear. Runs on every launch, so
     /// moving the app re-points the login item.

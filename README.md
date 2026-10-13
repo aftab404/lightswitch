@@ -6,7 +6,7 @@
 
 ![Lightswitch: type a few letters of a window's title and jump to it](media/lightswitch-demo.gif)
 
-Spotlight-style fuzzy window switcher. Press ⌘Space and start typing a window title or app name. Tab / Shift-Tab (or ↑/↓, ⌃N/⌃P) move the selection, Return jumps to that window, and Esc clears the query or closes the panel.
+Spotlight-style fuzzy window switcher. Press ⌘Space (or a shortcut you pick) and start typing a window title or app name. Tab / Shift-Tab (or ↑/↓, ⌃N/⌃P) move the selection, Return jumps to that window, and Esc clears the query or closes the panel.
 
 ## Download
 
@@ -33,7 +33,7 @@ Either way, the app runs as a menu bar item and starts at login once it's in an 
 ## One-time setup
 
 1. **Accessibility:** System Settings → Privacy & Security → Accessibility → enable Lightswitch. It needs this to read window titles and raise windows.
-2. **Free up ⌘Space:** System Settings → Keyboard → Keyboard Shortcuts… → Spotlight → uncheck "Show Spotlight search", or give Spotlight another shortcut. Lightswitch warns you if Spotlight still has ⌘Space and takes it over as soon as it's free.
+2. **Free up ⌘Space, or pick another shortcut:** Spotlight uses ⌘Space out of the box. Either go to System Settings → Keyboard → Keyboard Shortcuts… → Spotlight and uncheck "Show Spotlight search" (or give Spotlight another shortcut), or keep Spotlight and choose **Change Shortcut…** from the menu bar icon to give Lightswitch a different one, such as ⌥Space. If macOS still uses Lightswitch's shortcut for something else, Lightswitch tells you what and takes the shortcut over as soon as it's free.
 
 The build is ad-hoc signed, so every rebuild changes its signature and macOS drops the Accessibility grant. After a rebuild or an update, choose **Grant Accessibility Access…** from the menu bar icon (or **Allow…** in the panel). It clears the stale entry so macOS asks again. To avoid this, create a self-signed code signing certificate named "Lightswitch Dev" in Keychain Access; `build.sh` uses it automatically.
 
