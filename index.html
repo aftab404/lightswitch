@@ -481,7 +481,7 @@
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>Back and forth</h4>
-          <p>Your previous window is preselected, so ⌘Space then Return flips between your last two windows.</p>
+          <p>Your previous window is preselected, so ⌘Space then Return flips between your last two windows, even when one of them is on another desktop or in full screen.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>Keyboard first</h4>
@@ -587,7 +587,7 @@ cd lightswitch
         </details>
         <details>
           <summary>Does it see windows on other Spaces?</summary>
-          <p>Not yet. macOS's Accessibility API only reports windows on the current Space. Apps whose windows are all elsewhere, or in full screen, still appear as an app row, and choosing one switches to that app.</p>
+          <p>Partly. macOS's Accessibility API only lists the windows on the current Space, but it can reach each app's main window, the one you used last, wherever it is. So the window you came from is listed by its title even on another desktop or in full screen, and ⌘Space then Return takes you back to it. An app's other windows on other Spaces aren't listed, which is also why flipping between two windows of the same app on different desktops doesn't work yet. Apps with no window Lightswitch can reach appear as an app row, and choosing one switches to that app and a Space with its windows.</p>
         </details>
         <details>
           <summary>Why does macOS say it can't verify Lightswitch?</summary>
