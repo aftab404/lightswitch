@@ -2,6 +2,8 @@
 
 # Lightswitch
 
+**[aftab404.github.io/lightswitch](https://aftab404.github.io/lightswitch/)**
+
 Spotlight-style fuzzy window switcher. Press ⌘Space and start typing a window title or app name. Tab / Shift-Tab (or ↑/↓, ⌃N/⌃P) move the selection, Return jumps to that window, and Esc clears the query or closes the panel.
 
 ## Build and install
