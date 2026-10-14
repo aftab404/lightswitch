@@ -53,6 +53,8 @@ private enum OrderedIn {
 }
 
 enum Accessibility {
+    /// Nothing asks other apps anything over Accessibility until this is true: an app that turned down a request from
+    /// Lightswitch keeps refusing it after access is granted, until Lightswitch restarts.
     static var isTrusted: Bool {
         #if DEMO
         return true // demo recordings use sample windows and never touch other apps
@@ -159,19 +161,20 @@ enum WindowList {
         let frontmost = NSWorkspace.shared.frontmostApplication.flatMap { $0.processIdentifier == getpid() ? nil : $0 }
         if let frontmost { watchWindows(of: frontmost) } // in case that failed when it was activated
         let visited = visits
+        let isTrusted = Accessibility.isTrusted
 
         DispatchQueue.global(qos: .userInteractive).async {
             let stacking = onScreenStackingOrder()
             var perApp = [[WindowItem]](repeating: [], count: apps.count)
             let lock = NSLock()
-            DispatchQueue.concurrentPerform(iterations: apps.count) { i in
+            DispatchQueue.concurrentPerform(iterations: isTrusted ? apps.count : 0) { i in
                 let found = windows(of: apps[i])
                 lock.lock()
                 perApp[i] = found
                 lock.unlock()
             }
             var items = arrange(perApp, of: apps, stacking: stacking)
-            let current = frontmost.flatMap { windowYoureIn(of: $0.processIdentifier) }
+            let current = isTrusted ? frontmost.flatMap { windowYoureIn(of: $0.processIdentifier) } : nil
             markPrevious(in: &items, current: current?.windowID, visited: visited, apps: apps)
 
             DispatchQueue.main.async {
@@ -307,7 +310,7 @@ enum WindowList {
     static func frontWindow(of pid: pid_t) -> WindowItem {
         let app = NSRunningApplication(processIdentifier: pid)
         let info = AppInfo(pid: pid, name: app?.localizedName ?? "Unknown", isHidden: app?.isHidden ?? false, recency: 0)
-        return windows(of: info).first
+        return (Accessibility.isTrusted ? windows(of: info).first : nil)
             ?? WindowItem(id: "app-\(pid)", pid: pid, appName: info.name, title: "",
                           element: nil, isMinimized: false, isAppHidden: info.isHidden)
     }
@@ -332,7 +335,7 @@ enum WindowList {
         // Our panel never activates Lightswitch, and macOS may ignore activation requests from an app that
         // isn't active. Accessibility can make the app frontmost directly; without it, go through Launch
         // Services, the same route as clicking the app in the Dock.
-        let madeFrontmost = AXUIElementSetAttributeValue(
+        let madeFrontmost = Accessibility.isTrusted && AXUIElementSetAttributeValue(
             AXUIElementCreateApplication(item.pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue
         ) == .success
         if !madeFrontmost, let url = app?.bundleURL {
@@ -369,7 +372,7 @@ extension WindowList {
     /// Hears when the app's focused or main window changes, so switching between its windows counts too.
     private static func watchWindows(of app: NSRunningApplication) {
         let pid = app.processIdentifier
-        guard observers[pid] == nil, pid != getpid(), app.activationPolicy == .regular else { return }
+        guard observers[pid] == nil, pid != getpid(), app.activationPolicy == .regular, Accessibility.isTrusted else { return }
         var observer: AXObserver?
         guard AXObserverCreate(pid, { _, _, _, _ in WindowList.recordVisitSoon() }, &observer) == .success,
               let observer else { return }
@@ -378,7 +381,7 @@ extension WindowList {
         let added = [kAXFocusedWindowChangedNotification, kAXMainWindowChangedNotification].filter {
             AXObserverAddNotification(observer, axApp, $0 as CFString, nil) == .success
         }
-        // Without Accessibility access, or while the app is still starting up. Activating it tries again.
+        // Not while the app is still starting up. Activating it tries again.
         guard !added.isEmpty else { return }
         CFRunLoopAddSource(CFRunLoopGetMain(), AXObserverGetRunLoopSource(observer), .commonModes)
         observers[pid] = observer
@@ -395,7 +398,7 @@ extension WindowList {
     private static func recordVisitSoon() {
         pendingVisit?.cancel()
         let work = DispatchWorkItem {
-            guard let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid(),
+            guard Accessibility.isTrusted, let app = NSWorkspace.shared.frontmostApplication, app.processIdentifier != getpid(),
                   let visit = windowYoureIn(of: app.processIdentifier) else { return }
             remember(visit)
         }

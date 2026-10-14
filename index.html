@@ -538,13 +538,13 @@
         </div>
         <div class="step-card">
           <span class="step-num">3</span>
-          <h3>Allow Accessibility access</h3>
-          <p>macOS only shares window titles through Accessibility. Approve the prompt, or go to <span class="path">System Settings → Privacy &amp; Security → Accessibility</span> and switch on Lightswitch.</p>
+          <h3>Follow the welcome window</h3>
+          <p>Lightswitch opens a short setup window that ticks off each step as you go. Click <span class="path">Allow Access…</span> and switch on Lightswitch in <span class="path">System Settings → Privacy &amp; Security → Accessibility</span>: macOS only shares window titles through Accessibility. Optionally, click <span class="path">Allow…</span> next to each running browser to search its tabs. Reopen the window any time with <span class="path">Setup…</span> in the menu bar.</p>
         </div>
         <div class="step-card">
           <span class="step-num">4</span>
           <h3>Hand over ⌘Space, or pick another</h3>
-          <p>Spotlight uses ⌘Space out of the box. Lightswitch opens apps too, so you keep Spotlight's most common use. In <span class="path">System Settings → Keyboard → Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search" or give it another shortcut, and Lightswitch takes over ⌘Space as soon as it's free. Rather keep Spotlight? Choose <span class="path">Change Shortcut…</span> from Lightswitch's menu bar icon and press the combination you want, such as ⌥Space.</p>
+          <p>Spotlight uses ⌘Space out of the box. Lightswitch opens apps too, so you keep Spotlight's most common use. The welcome window's <span class="path">Open Keyboard Settings</span> takes you there: under <span class="path">Keyboard Shortcuts… → Spotlight</span>, untick "Show Spotlight search" or give it another shortcut, and Lightswitch takes over ⌘Space as soon as it's free. Rather keep Spotlight? Click <span class="path">Use ⌥Space</span>, or <span class="path">Choose Another…</span> and press the combination you want. <span class="path">Change Shortcut…</span> in the menu bar icon changes it later.</p>
         </div>
         <div class="step-card wide">
           <h3>Prefer to build it yourself?</h3>
@@ -579,11 +579,11 @@ cd lightswitch
         </details>
         <details>
           <summary>Why does macOS ask to let Lightswitch control my browser?</summary>
-          <p>Browsers only share their tabs through Apple Events, the system behind AppleScript, and macOS asks once per browser before an app may send them. Click <span class="path">Allow</span> to search that browser's tabs. If you'd rather not, click <span class="path">Don't Allow</span>: its windows are still listed as usual. You can change your mind in <span class="path">System Settings → Privacy &amp; Security → Automation → Lightswitch</span>. Lightswitch is ad-hoc signed, so, as with Accessibility, macOS ties your answer to that exact build and asks again after each update. If you build from source, a "Lightswitch Dev" code signing certificate makes the answer stick across rebuilds.</p>
+          <p>Browsers only share their tabs through Apple Events, the system behind AppleScript, and macOS asks once per browser before an app may send them: when you click <span class="path">Allow…</span> next to a browser in the welcome window, or the first time you open Lightswitch while a browser you haven't been asked about is running. Click <span class="path">Allow</span> to search that browser's tabs. If you'd rather not, click <span class="path">Don't Allow</span>: its windows are still listed as usual. You can change your mind in <span class="path">System Settings → Privacy &amp; Security → Automation → Lightswitch</span>. Lightswitch is ad-hoc signed, so, as with Accessibility, macOS ties your answer to that exact build and asks again after each update. If you build from source, a "Lightswitch Dev" code signing certificate makes the answer stick across rebuilds.</p>
         </details>
         <details>
           <summary>Can I keep Spotlight?</summary>
-          <p>Yes. Leave Spotlight on ⌘Space and give Lightswitch another shortcut: choose <span class="path">Change Shortcut…</span> from its menu bar icon and press the combination you want, such as ⌥Space. Or let Lightswitch have ⌘Space and move Spotlight to a different shortcut in Keyboard Shortcuts → Spotlight.</p>
+          <p>Yes. Leave Spotlight on ⌘Space and give Lightswitch another shortcut: click <span class="path">Use ⌥Space</span> in the welcome window, or choose <span class="path">Change Shortcut…</span> from its menu bar icon and press the combination you want. Or let Lightswitch have ⌘Space and move Spotlight to a different shortcut in Keyboard Shortcuts → Spotlight.</p>
         </details>
         <details>
           <summary>Does it see windows on other Spaces?</summary>
@@ -595,7 +595,7 @@ cd lightswitch
         </details>
         <details>
           <summary>Why do I have to approve Accessibility again after updating?</summary>
-          <p>macOS ties the permission to the exact build of the app, and each version is a new build. Click <span class="path">Allow…</span> in the panel, or <span class="path">Grant Accessibility Access…</span> in the menu bar: it clears the stale entry so macOS asks again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
+          <p>macOS ties the permission to the exact build of the app, and each version is a new build. Lightswitch opens its welcome window when it starts without access: click <span class="path">Allow Access…</span> there (or <span class="path">Allow…</span> in the panel, or <span class="path">Grant Accessibility Access…</span> in the menu bar). It clears the stale entry so macOS asks again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
         </details>
       </div>
     </section>

@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var shortcut = Shortcut.saved
     private var hotKey: HotKey?
     private let recorder = ShortcutRecorder()
+    private let welcome = WelcomeWindow()
     private var shortcutWatch: Timer?
     private var statusItem: NSStatusItem!
     private var showItem: NSMenuItem!
@@ -48,16 +49,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         setUpStatusItem()
         syncLoginItem()
+        setUpWelcome()
 
-        Accessibility.requestIfNeeded()
+        // One window for Accessibility, the shortcut and browser tabs, rather than a prompt and an alert of their own.
+        if welcome.isNeededAtLaunch { welcome.show() }
         checkShortcut()
         if CommandLine.arguments.contains("--show") { show() }
         #endif
     }
 
-    // Launching the app again (Finder, `open`) shows the switcher.
+    // Launching the app again (Finder, `open`) shows the switcher, or brings back the welcome window if it's open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        show()
+        welcome.isVisible ? welcome.show() : show()
         return false
     }
 
@@ -84,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         resize(to: model.height)
         panel.focusSearchField()
         panel.makeKeyAndOrderFront(nil)
+        welcome.switcherDidOpen()
 
         if let items {
             model.items = items
@@ -91,7 +95,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         model.apps = InstalledApps.launchable
         InstalledApps.refreshIfStale()
-        BrowserTabs.refresh()
+        // The welcome window asks about each browser itself, so trying the shortcut from there doesn't bring up prompts.
+        BrowserTabs.refresh(askingPermission: !welcome.isVisible)
         let opening = model.showCount
         WindowList.fetch { [weak self] items in
             // A slower fetch from an earlier opening mustn't replace this one's list.
@@ -145,7 +150,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard shortcut.isTakenBySystem else { return }
         shortcutItem.title = "\(shortcut) Is Used by \(shortcut.systemOwner?.section ?? "a macOS Shortcut")…"
         shortcutItem.isHidden = false
-        DispatchQueue.main.async { self.showShortcutAlert() }
+        // The welcome window explains this itself; the alert is for later launches.
+        if !welcome.isVisible { DispatchQueue.main.async { self.showShortcutAlert() } }
 
         shortcutWatch = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] timer in
             MainActor.assumeIsolated {
@@ -199,7 +205,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         new.save()
         shortcutWatch?.invalidate()
         shortcutItem.isHidden = true
+        welcome.refresh()
         return nil
+    }
+
+    // MARK: Welcome
+
+    private func setUpWelcome() {
+        let model = welcome.model
+        model.currentShortcut = { [weak self] in self?.shortcut ?? .standard }
+        model.isShortcutRegistered = { [weak self] in self?.hotKey != nil }
+        model.onUseShortcut = { [weak self] shortcut in self?.use(shortcut) }
+        model.onChangeShortcut = { [weak self] in self?.changeShortcut() }
+        model.loginItemState = { [weak self] in
+            guard let self, self.isInstalledCopy else { return nil }
+            return SMAppService.mainApp.status == .enabled
+        }
+        model.onSetOpensAtLogin = { [weak self] on in
+            guard (SMAppService.mainApp.status == .enabled) != on else { return }
+            self?.toggleLoginItem()
+        }
+    }
+
+    @objc private func showWelcome() {
+        welcome.show()
     }
 
     // MARK: Menu bar
@@ -223,6 +252,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         accessibilityItem = NSMenuItem(title: "Grant Accessibility Access…", action: #selector(requestAccessibility), keyEquivalent: "")
         accessibilityItem.target = self
         menu.addItem(accessibilityItem)
+
+        let setupItem = NSMenuItem(title: "Setup…", action: #selector(showWelcome), keyEquivalent: "")
+        setupItem.target = self
+        menu.addItem(setupItem)
 
         let changeItem = NSMenuItem(title: "Change Shortcut…", action: #selector(changeShortcut), keyEquivalent: "")
         changeItem.target = self

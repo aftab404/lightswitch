@@ -18,7 +18,7 @@ The app isn't notarized by Apple yet, so the first launch needs one extra confir
 2. Open System Settings → Privacy & Security and scroll down to the Security section.
 3. Next to the message about Lightswitch, click **Open Anyway**, then confirm with your password or Touch ID.
 
-You only do this once per version.
+You only do this once per version. Lightswitch then opens its welcome window, which walks you through the one-time setup below.
 
 ## Build from source
 
@@ -32,11 +32,14 @@ Either way, the app runs as a menu bar item and starts at login once it's in an 
 
 ## One-time setup
 
-1. **Accessibility:** System Settings → Privacy & Security → Accessibility → enable Lightswitch. It needs this to read window titles and raise windows.
-2. **Browser tabs:** the first time you open the panel while a supported browser is running, macOS asks whether Lightswitch may control it. Allow it to search that browser's tabs. If you don't, its windows are listed as before; you can change your mind in System Settings → Privacy & Security → Automation → Lightswitch.
-3. **Free up ⌘Space, or pick another shortcut:** Spotlight uses ⌘Space out of the box. Lightswitch opens apps as well, so handing it ⌘Space doesn't cost you Spotlight's app launching. Either go to System Settings → Keyboard → Keyboard Shortcuts… → Spotlight and uncheck "Show Spotlight search" (or give Spotlight another shortcut), or keep Spotlight and choose **Change Shortcut…** from the menu bar icon to give Lightswitch a different one, such as ⌥Space. If macOS still uses Lightswitch's shortcut for something else, Lightswitch tells you what and takes the shortcut over as soon as it's free.
+The first time Lightswitch starts, its welcome window takes you through these steps and ticks each one off as it's done. You can open it again with **Setup…** from the menu bar icon.
 
-The build is ad-hoc signed, so every rebuild changes its signature and macOS drops the Accessibility grant. After a rebuild or an update, choose **Grant Accessibility Access…** from the menu bar icon (or **Allow…** in the panel). It clears the stale entry so macOS asks again. macOS also asks again for permission to control each browser. To avoid both, create a self-signed code signing certificate named "Lightswitch Dev" in Keychain Access; `build.sh` uses it automatically.
+1. **Accessibility:** click **Allow Access…**, then switch on Lightswitch in System Settings → Privacy & Security → Accessibility. It needs this to read window titles and raise windows.
+2. **Free up ⌘Space, or pick another shortcut:** Spotlight uses ⌘Space out of the box, and macOS's own shortcuts come first. Lightswitch opens apps as well, so handing it ⌘Space doesn't cost you Spotlight's app launching: click **Open Keyboard Settings**, go to Keyboard Shortcuts… → Spotlight and uncheck "Show Spotlight search" (or give Spotlight another shortcut), and Lightswitch takes ⌘Space over as soon as it's free. Or keep Spotlight and click **Use ⌥Space**, or **Choose Another…** to press a combination of your own. **Change Shortcut…** in the menu bar icon changes it later. If macOS takes Lightswitch's shortcut for something else on a later launch, Lightswitch tells you what and takes the shortcut over as soon as it's free.
+3. **Browser tabs (optional):** each supported browser that's running gets an **Allow…** button, which brings up macOS's prompt asking whether Lightswitch may control it. Allow it to search that browser's tabs. If you don't, its windows are listed as before; you can change your mind in System Settings → Privacy & Security → Automation → Lightswitch. A browser you haven't been asked about, such as one that wasn't running, gets the prompt the first time you open the panel while it runs.
+4. **Try it:** press your shortcut and type a few letters of a window, tab or app.
+
+The build is ad-hoc signed, so every rebuild changes its signature and macOS drops the Accessibility grant. After a rebuild or an update, Lightswitch opens the welcome window again at launch: click **Allow Access…** there (or **Grant Accessibility Access…** in the menu bar icon, or **Allow…** in the panel). It clears the stale entry so macOS asks again. macOS also asks again for permission to control each browser, which the welcome window's **Allow…** buttons cover too. To avoid both, create a self-signed code signing certificate named "Lightswitch Dev" in Keychain Access; `build.sh` uses it automatically.
 
 The icon is drawn by `icon/make-icon.swift`; run `swift icon/make-icon.swift` to regenerate `icon/AppIcon.icns` after changing it.
 

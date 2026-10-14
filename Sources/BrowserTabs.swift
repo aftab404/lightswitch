@@ -99,14 +99,11 @@ enum BrowserTabs {
     private static var loggedErrors: [pid_t: Int] = [:]
 
     /// Starts reading the tabs of every supported browser that's running, unless a read of it is still going.
-    static func refresh() {
-        for app in NSWorkspace.shared.runningApplications {
-            guard let bundleID = app.bundleIdentifier, let family = browsers[bundleID], !app.isTerminated,
-                  reading.insert(app.processIdentifier).inserted else { continue }
-            let browser = RunningBrowser(pid: app.processIdentifier, name: app.localizedName ?? bundleID,
-                                         icon: app.icon, bundleURL: app.bundleURL, family: family)
+    /// Without `askingPermission`, a browser the user hasn't been asked about yet is skipped rather than prompted for.
+    static func refresh(askingPermission: Bool = true) {
+        for browser in runningBrowsers() where reading.insert(browser.pid).inserted {
             DispatchQueue.global(qos: .userInitiated).async {
-                let result = Result { try read(browser) }
+                let result = Result { try read(browser, askingPermission: askingPermission) }
                 DispatchQueue.main.async {
                     reading.remove(browser.pid)
                     switch result {
@@ -157,11 +154,19 @@ enum BrowserTabs {
         }
     }
 
+    private static func runningBrowsers() -> [RunningBrowser] {
+        NSWorkspace.shared.runningApplications.compactMap { app in
+            guard let bundleID = app.bundleIdentifier, let family = browsers[bundleID], !app.isTerminated else { return nil }
+            return RunningBrowser(pid: app.processIdentifier, name: app.localizedName ?? bundleID,
+                                  icon: app.icon, bundleURL: app.bundleURL, family: family)
+        }
+    }
+
     // MARK: Reading
 
-    private static func read(_ browser: RunningBrowser) throws -> [BrowserTab] {
+    private static func read(_ browser: RunningBrowser, askingPermission: Bool) throws -> [BrowserTab] {
         let events = AppleEvents(pid: browser.pid)
-        try events.requestPermission()
+        try events.requestPermission(ask: askingPermission)
 
         let dialect: Dialect
         let windows: [ListedWindow]
@@ -257,6 +262,48 @@ enum BrowserTabs {
             return try read()
         } catch let error as AppleEventError where !error.isFatal {
             return nil
+        }
+    }
+}
+
+// MARK: Permission
+
+extension BrowserTabs {
+    /// A supported browser that's running.
+    struct Browser {
+        let pid: pid_t
+        let name: String
+        let icon: NSImage?
+    }
+
+    /// Whether macOS lets Lightswitch send a browser Apple Events, which reading its tabs takes.
+    enum Permission {
+        case allowed, denied
+        /// The user hasn't been asked yet.
+        case notAsked
+        /// macOS couldn't say, for example because the browser has quit.
+        case unknown
+    }
+
+    /// The supported browsers that are running, by name.
+    static var running: [Browser] {
+        runningBrowsers()
+            .map { Browser(pid: $0.pid, name: $0.name, icon: $0.icon) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    /// Finds out whether Lightswitch may read `pid`'s tabs and calls back on the main thread. With `ask`, macOS's
+    /// "Lightswitch wants access to control …" prompt comes first if the user hasn't answered it yet, and the
+    /// callback waits for their answer.
+    static func permission(of pid: pid_t, ask: Bool, completion: @escaping @MainActor (Permission) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let permission: Permission = switch Int(AppleEvents(pid: pid).permission(ask: ask)) {
+            case Int(noErr): .allowed
+            case Int(errAEEventNotPermitted): .denied
+            case Int(errAEEventWouldRequireUserConsent): .notAsked
+            default: .unknown
+            }
+            DispatchQueue.main.async { completion(permission) }
         }
     }
 }
@@ -399,6 +446,7 @@ struct AppleEventError: Error, CustomStringConvertible {
         switch code {
         case Self.changedWhileReading: "its windows changed while they were being read"
         case Int(errAEEventNotPermitted): "Lightswitch isn't allowed to control it (\(code))"
+        case Int(errAEEventWouldRequireUserConsent): "Lightswitch hasn't asked to control it yet (\(code))"
         case Int(errAETimeout): "it didn't answer in time (\(code))"
         case Int(errAEEventNotHandled): "its scripting dictionary isn't one Lightswitch knows (\(code))"
         default: "Apple Event error \(code)"
@@ -415,10 +463,16 @@ private struct AppleEvents {
         target = NSAppleEventDescriptor(processIdentifier: pid)
     }
 
-    /// Shows the "Lightswitch wants access to control …" prompt if the user hasn't answered it yet, and throws
-    /// if they said no. Blocks until they answer, so never call it on the main thread.
-    func requestPermission() throws {
-        let status = AEDeterminePermissionToAutomateTarget(target.aeDesc, AEEventClass(typeWildCard), AEEventID(typeWildCard), true)
+    /// noErr if Lightswitch may send it events, errAEEventNotPermitted if the user said no, and
+    /// errAEEventWouldRequireUserConsent if they haven't been asked. With `ask`, that last case shows the
+    /// "Lightswitch wants access to control …" prompt instead and blocks until they answer, so never ask on the main thread.
+    func permission(ask: Bool) -> OSStatus {
+        AEDeterminePermissionToAutomateTarget(target.aeDesc, AEEventClass(typeWildCard), AEEventID(typeWildCard), ask)
+    }
+
+    /// Throws unless Lightswitch may send it events, asking the user first if `ask` (see `permission(ask:)`).
+    func requestPermission(ask: Bool) throws {
+        let status = permission(ask: ask)
         guard status == noErr else { throw AppleEventError(code: Int(status)) }
     }
 
