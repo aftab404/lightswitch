@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var shortcutItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var accessibilityItem: NSMenuItem!
+    /// Browsers whose tabs are still being read for this opening, and the window list if it's waiting for them.
+    private var tabReads: Set<pid_t> = []
+    private var heldWindows: [WindowItem]?
     private var panelX: CGFloat = 0
     private var panelTop: CGFloat = 0
 
@@ -45,7 +48,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         BrowserTabs.onUpdate = { [weak self] pid, tabs in
             // Possibly from a read started by an earlier opening that took a while; it's still recent.
             guard let self, self.panel.isVisible else { return }
-            self.model.setTabs(tabs, of: pid)
+            if let tabs { self.model.setTabs(tabs, of: pid) }
+            self.tabReads.remove(pid)
+            if self.tabReads.isEmpty { self.showHeldWindows() }
+        }
+        // Not in demo recordings, whose sample rows stand in for windows of real apps.
+        model.onCloseWindow = { [weak self] item in self?.close(item) }
+        model.onCloseTab = { [weak self] tab in self?.close(tab) }
+        model.onQuit = { pid in
+            if NSRunningApplication(processIdentifier: pid)?.terminate() != true { NSSound.beep() }
+        }
+        // Quit with ⌘Q from the panel, or some other way while it's open. An app that asks about unsaved changes
+        // first quits once the user has answered, if they let it.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification, object: nil, queue: .main
+        ) { [weak self] note in
+            guard let pid = (note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)?.processIdentifier
+            else { return }
+            MainActor.assumeIsolated {
+                guard let self, self.panel.isVisible else { return }
+                self.model.appQuit(pid)
+            }
         }
         setUpStatusItem()
         syncLoginItem()
@@ -96,13 +119,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.apps = InstalledApps.launchable
         InstalledApps.refreshIfStale()
         // The welcome window asks about each browser itself, so trying the shortcut from there doesn't bring up prompts.
-        BrowserTabs.refresh(askingPermission: !welcome.isVisible)
+        tabReads = BrowserTabs.refresh(askingPermission: !welcome.isVisible)
+        heldWindows = nil
         let opening = model.showCount
         WindowList.fetch { [weak self] items in
             // A slower fetch from an earlier opening mustn't replace this one's list.
             guard let self, self.panel.isVisible, self.model.showCount == opening else { return }
-            self.model.items = items
+            guard !self.tabReads.isEmpty else {
+                self.model.items = items
+                return
+            }
+            // Browsers usually answer before the window list is ready. If one hasn't, give it a moment, so the list
+            // comes up with its windows already split into tabs instead of rearranging itself just after.
+            self.heldWindows = items
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+                guard let self, self.model.showCount == opening else { return }
+                self.showHeldWindows()
+            }
         }
+    }
+
+    private func showHeldWindows() {
+        guard let windows = heldWindows else { return }
+        heldWindows = nil
+        model.items = windows
     }
 
     func hide() {
@@ -125,6 +165,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func open(_ app: InstalledApp) {
         hide()
         InstalledApps.open(app)
+    }
+
+    // The panel stays open while windows and tabs close, so several can be closed in a row.
+
+    private func close(_ item: WindowItem) {
+        let opening = model.showCount
+        WindowList.close(item) { [weak self] outcome in
+            if outcome == .notClosable { NSSound.beep() }
+            guard let self, self.panel.isVisible, self.model.showCount == opening else { return }
+            guard outcome == .closed else {
+                self.model.closeEnded(item.id)
+                return
+            }
+            self.model.windowClosed(item)
+            // A browser window's tabs went with it.
+            if BrowserTabs.running.contains(where: { $0.pid == item.pid }) {
+                BrowserTabs.refresh(askingPermission: false)
+            }
+        }
+    }
+
+    private func close(_ tab: BrowserTab) {
+        let opening = model.showCount
+        BrowserTabs.close(tab) { [weak self] tabs in
+            if tabs == nil { NSSound.beep() }
+            guard let self, self.panel.isVisible, self.model.showCount == opening else { return }
+            guard let tabs else {
+                self.model.closeEnded(tab.id)
+                return
+            }
+            // Closing its last tab closes a window, and closing the one it shows changes its title.
+            WindowList.fetch { [weak self] windows in
+                guard let self, self.panel.isVisible, self.model.showCount == opening else { return }
+                self.model.tabClosed(tab, leaving: tabs, windows: windows)
+            }
+        }
     }
 
     private func resize(to height: CGFloat) {

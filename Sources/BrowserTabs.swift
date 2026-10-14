@@ -36,6 +36,11 @@ struct BrowserTab {
 
     var id: String { "tab-\(pid)-\(window)-\(index)" }
 
+    /// Whether `other` is this tab, as read at another time, still in the same place.
+    fileprivate func isSame(as other: BrowserTab) -> Bool {
+        window == other.window && index == other.index && url == other.url && title == other.title
+    }
+
     fileprivate init(browser: RunningBrowser, dialect: Dialect, window: ListedWindow, windowOrder: Int,
                      index: Int, title: String, url: String) {
         pid = browser.pid
@@ -81,8 +86,8 @@ struct BrowserTab {
 /// raw events can be sent from a background queue and give up after a timeout, so a hung browser can't stall
 /// anything. They're addressed by process ID, which can't launch a browser that isn't running.
 enum BrowserTabs {
-    /// Called on the main thread with a browser's tabs each time they're read.
-    static var onUpdate: @MainActor (_ pid: pid_t, _ tabs: [BrowserTab]) -> Void = { _, _ in }
+    /// Called on the main thread after each read of a browser's tabs, with nil if they couldn't be read.
+    static var onUpdate: @MainActor (_ pid: pid_t, _ tabs: [BrowserTab]?) -> Void = { _, _ in }
 
     private static let browsers: [String: Family] = [
         "com.google.Chrome": .chromium,
@@ -100,7 +105,9 @@ enum BrowserTabs {
 
     /// Starts reading the tabs of every supported browser that's running, unless a read of it is still going.
     /// Without `askingPermission`, a browser the user hasn't been asked about yet is skipped rather than prompted for.
-    static func refresh(askingPermission: Bool = true) {
+    /// Returns the browsers being read, each of which will call `onUpdate`.
+    @discardableResult
+    static func refresh(askingPermission: Bool = true) -> Set<pid_t> {
         for browser in runningBrowsers() where reading.insert(browser.pid).inserted {
             DispatchQueue.global(qos: .userInitiated).async {
                 let result = Result { try read(browser, askingPermission: askingPermission) }
@@ -111,6 +118,7 @@ enum BrowserTabs {
                         loggedErrors[browser.pid] = nil
                         onUpdate(browser.pid, tabs)
                     case .failure(let failure):
+                        onUpdate(browser.pid, nil)
                         // Most likely the user said no to the permission prompt. The window rows stay, so just log it.
                         let error = failure as? AppleEventError ?? AppleEventError(code: Int(errAEEventFailed))
                         guard loggedErrors[browser.pid] != error.code else { return }
@@ -120,13 +128,15 @@ enum BrowserTabs {
                 }
             }
         }
+        return reading
     }
 
-    /// Whether `title`, a window's title from Accessibility, is the title of `tab`'s window. Chromium browsers
-    /// shorten long window names in the middle for scripting, while Accessibility gets the current tab's full
-    /// title with the browser's name added: "Inbox - Google Chrome" for "Inbox".
-    static func windowTitle(_ title: String, matches tab: BrowserTab) -> Bool {
-        tab.windowTitles.contains { title == $0 || title.hasPrefix($0 + " - ") }
+    /// How well `title`, a window's title from Accessibility, fits `tab`'s window: the length of the window title
+    /// it is or starts with, so higher is closer, or nil if it's another window. Chromium browsers shorten long
+    /// window names in the middle for scripting, while Accessibility gets the current tab's full title with the
+    /// browser's name added: "Inbox - Google Chrome" for "Inbox".
+    static func windowTitleFit(_ title: String, _ tab: BrowserTab) -> Int? {
+        tab.windowTitles.filter { title == $0 || title.hasPrefix($0 + " - ") }.map(\.count).max()
     }
 
     /// Makes `tab` the one its window shows and puts that window in front of the browser's others, then calls
@@ -152,6 +162,46 @@ enum BrowserTabs {
             }
             DispatchQueue.main.async { completion() }
         }
+    }
+
+    /// Closes `tab`, then calls back on the main thread with its browser's tabs as they are afterwards, or nil if it
+    /// couldn't be closed. The tab is looked up again first: closing a tab moves the ones after it in its window up a
+    /// place, so the panel's copy may be behind. Closes run one at a time for that reason. A page that asks whether to
+    /// leave keeps its tab until the user answers.
+    static func close(_ tab: BrowserTab, completion: @escaping @MainActor ([BrowserTab]?) -> Void) {
+        let browser = runningBrowsers().first { $0.pid == tab.pid }
+        closing.async {
+            var result: [BrowserTab]?
+            do {
+                guard let browser else { throw AppleEventError(code: Int(procNotFound)) }
+                var tabs = try read(browser, askingPermission: false)
+                if let target = counterpart(of: tab, in: tabs) {
+                    let window = target.window.specifier
+                    try AppleEvents(pid: tab.pid).send(target.dialect.close, .element(target.dialect.tab, index: target.index, of: window))
+                    // The browser may take a moment to let go of it.
+                    let deadline = Date() + 0.5
+                    while tabs.contains(where: { $0.isSame(as: target) }), Date() < deadline {
+                        usleep(50_000)
+                        tabs = try read(browser, askingPermission: false)
+                    }
+                }
+                result = tabs
+            } catch {
+                NSLog("Lightswitch: could not close the \(tab.browserName) tab: \(error)")
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
+    private static let closing = DispatchQueue(label: "Lightswitch.closing-tabs", qos: .userInitiated)
+
+    /// `tab` in a newer read of its browser: the tab in the same window with the same address, preferably with the
+    /// same title too, nearest its old place.
+    private static func counterpart(of tab: BrowserTab, in tabs: [BrowserTab]) -> BrowserTab? {
+        func distance(_ other: BrowserTab) -> (Int, Int) {
+            (other.title == tab.title ? 0 : 1, abs(other.index - tab.index))
+        }
+        return tabs.filter { $0.window == tab.window && $0.url == tab.url }.min { distance($0) < distance($1) }
     }
 
     private static func runningBrowsers() -> [RunningBrowser] {
@@ -327,6 +377,22 @@ private enum Dialect {
     case chromium
     case safari
     case arc(ArcTerms)
+
+    /// The tab class.
+    var tab: OSType {
+        switch self {
+        case .chromium: Code.chromiumTab
+        case .safari: Code.safariTab
+        case .arc(let terms): terms.tab
+        }
+    }
+
+    var close: (eventClass: AEEventClass, eventID: AEEventID) {
+        switch self {
+        case .chromium, .safari: Code.close
+        case .arc(let terms): terms.close
+        }
+    }
 }
 
 private struct ListedWindow {
@@ -342,7 +408,7 @@ private struct ListedWindow {
 }
 
 /// How to find a window again when switching to one of its tabs.
-private enum WindowRef: CustomStringConvertible {
+private enum WindowRef: Equatable, CustomStringConvertible {
     case number(Int32)
     case text(String)
     case index(Int)
@@ -380,6 +446,7 @@ private enum Code {
     static let name = fourCharCode("pnam") // also a Chromium tab's title and a Safari tab's name
     static let index = fourCharCode("pidx")
     static let minimized = fourCharCode("pmnd")
+    static let close = (eventClass: AEEventClass(kAECoreSuite), eventID: AEEventID(kAEClose))
     // Chromium's scripting.sdef, which Chrome, Brave, Edge, Vivaldi and Chromium all ship.
     static let chromiumTab = fourCharCode("CrTb")
     static let chromiumURL = fourCharCode("URL ")
@@ -399,6 +466,8 @@ private struct ArcTerms {
     let id: OSType
     let activeTab: OSType
     let select: (eventClass: AEEventClass, eventID: AEEventID)
+    /// The Standard Suite's close unless the dictionary says otherwise.
+    let close: (eventClass: AEEventClass, eventID: AEEventID)
 
     init?(app: URL?) {
         guard let app, let bundle = Bundle(url: app),
@@ -422,6 +491,11 @@ private struct ArcTerms {
         self.id = fourCharCode(id)
         self.activeTab = fourCharCode(activeTab)
         self.select = (fourCharCode(String(select.prefix(4))), fourCharCode(String(select.suffix(4))))
+        if let close = code("//command[@name='close']/@code"), close.utf8.count == 8 {
+            self.close = (fourCharCode(String(close.prefix(4))), fourCharCode(String(close.suffix(4))))
+        } else {
+            self.close = Code.close
+        }
     }
 }
 

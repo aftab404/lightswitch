@@ -453,3 +453,61 @@ extension WindowList {
         return row(for: visit.element, windowID: visit.windowID, id: "\(app.pid)-\(visit.windowID)-visited", of: app)
     }
 }
+
+// MARK: Closing windows
+
+extension WindowList {
+    enum CloseOutcome {
+        case closed
+        /// Its close button was pressed but the window stayed, for example behind a "Save changes?" sheet.
+        case stillOpen
+        /// It has no close button, or one that's turned off.
+        case notClosable
+    }
+
+    /// Presses the window's close button, as clicking it would, then calls back on the main thread with what happened.
+    /// A window that's still there shortly after is left for the user to deal with.
+    static func close(_ item: WindowItem, completion: @escaping @MainActor (CloseOutcome) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            var outcome = CloseOutcome.notClosable
+            if let window = item.element, let value = attribute(window, kAXCloseButtonAttribute),
+               CFGetTypeID(value) == AXUIElementGetTypeID() {
+                let button = value as! AXUIElement
+                AXUIElementSetMessagingTimeout(button, 0.3)
+                // An app that asks before closing with an alert of its own doesn't answer until the user has.
+                let pressed = attribute(button, kAXEnabledAttribute) as? Bool != false
+                    && [.success, .cannotComplete].contains(AXUIElementPerformAction(button, kAXPressAction as CFString))
+                if pressed {
+                    outcome = .stillOpen
+                    let deadline = Date() + 0.5
+                    repeat {
+                        if !isOpen(window, id: item.windowID, pid: item.pid) {
+                            outcome = .closed
+                            break
+                        }
+                        usleep(50_000)
+                    } while Date() < deadline
+                }
+            }
+            DispatchQueue.main.async { completion(outcome) }
+        }
+    }
+
+    /// Whether a window is still open. Closing one usually invalidates its element; an app that keeps a closed window
+    /// around takes it out of its list of windows and orders it out.
+    private static func isOpen(_ window: AXUIElement, id: CGWindowID, pid: pid_t) -> Bool {
+        var role: CFTypeRef?
+        switch AXUIElementCopyAttributeValue(window, kAXRoleAttribute as CFString, &role) {
+        case .success: break
+        case .invalidUIElement: return false
+        default: return true // busy, perhaps asking the user something
+        }
+        let axApp = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(axApp, 0.3)
+        if let windows = attribute(axApp, kAXWindowsAttribute) as? [AXUIElement], windows.contains(where: { CFEqual($0, window) }) {
+            return true
+        }
+        // The list only has this Space's windows and minimized ones.
+        return id == 0 || OrderedIn.any([id]) != false
+    }
+}

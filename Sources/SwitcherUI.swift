@@ -47,13 +47,14 @@ final class SwitcherModel: ObservableObject {
             badge = item.badge
         }
 
-        init(_ tab: BrowserTab) {
+        /// `badge` is its window's, like "Minimized".
+        init(_ tab: BrowserTab, badge: String? = nil) {
             target = .tab(tab)
             id = tab.id
             title = tab.title
             subtitle = tab.subtitle
             icon = tab.icon
-            badge = nil
+            self.badge = badge
         }
 
         init(_ app: InstalledApp) {
@@ -63,6 +64,15 @@ final class SwitcherModel: ObservableObject {
             subtitle = app.folder
             icon = InstalledApps.icon(for: app)
             badge = "Open"
+        }
+
+        /// The running app the row belongs to: a tab's is its browser. nil for an app that isn't running.
+        var pid: pid_t? {
+            switch target {
+            case .window(let item): item.pid
+            case .tab(let tab): tab.pid
+            case .app: nil
+            }
         }
     }
 
@@ -84,22 +94,29 @@ final class SwitcherModel: ObservableObject {
     @Published private(set) var needsAccessibility = false
 
     var items: [WindowItem] = [] {
-        didSet { refilter() }
+        didSet {
+            matchTabWindows()
+            refilter()
+        }
     }
     /// Installed apps to offer when the query matches them.
     var apps: [InstalledApp] = [] {
         didSet { refilter() }
     }
-    /// The tabs of each browser that could be read, by pid. While typing they're listed in place of that
-    /// browser's windows: a browser window's row is just its current tab.
+    /// The tabs of each browser that could be read, by pid. They're listed in place of that browser's windows:
+    /// a browser window's row is just its current tab.
     private var tabs: [pid_t: [BrowserTab]] = [:]
-    /// For each of those browsers, one tab per window, to tell which window rows the tabs stand in for.
-    private var tabWindows: [pid_t: [BrowserTab]] = [:]
+    /// The row each of those browsers' windows had in `items`, by pid and `BrowserTab.windowOrder`. A window on
+    /// another Space can have none.
+    private var tabWindowRows: [pid_t: [Int: WindowItem]] = [:]
 
     var onConfirm: (WindowItem) -> Void = { _ in }
     /// The tab, and its window's row if the window could be told apart from the browser's others by title.
     var onSwitchToTab: (BrowserTab, WindowItem?) -> Void = { _, _ in }
     var onOpen: (InstalledApp) -> Void = { _ in }
+    var onCloseWindow: (WindowItem) -> Void = { _ in }
+    var onCloseTab: (BrowserTab) -> Void = { _ in }
+    var onQuit: (pid_t) -> Void = { _ in }
     var onCancel: () -> Void = {}
     var onHeightChange: (CGFloat) -> Void = { _ in }
 
@@ -107,6 +124,9 @@ final class SwitcherModel: ObservableObject {
 
     /// The app that was frontmost when the panel opened. Its top window is the one the user is already in.
     private var currentAppPID: pid_t?
+    /// Rows whose window or tab is being closed, so pressing ⌘W on one again doesn't close another tab at the same
+    /// address.
+    private var closing: Set<String> = []
 
     // Must mirror SwitcherView's layout: each section below the search bar adds a 1pt separator.
     var height: CGFloat {
@@ -132,20 +152,49 @@ final class SwitcherModel: ObservableObject {
         needsAccessibility = !Accessibility.isTrusted
         query = ""
         tabs = [:]
-        tabWindows = [:]
+        tabWindowRows = [:]
+        closing = []
         items = []
         showCount += 1
     }
 
     func setTabs(_ browserTabs: [BrowserTab], of pid: pid_t) {
+        let selected = results.indices.contains(selection) ? results[selection] : nil
+        let position = selection
         tabs[pid] = browserTabs
-        tabWindows[pid] = browserTabs.filter { $0.index == 1 }
-        guard !query.isEmpty else { return }
-        // Tabs usually arrive a moment after the windows. If the user has already moved down to a row, keep it.
-        let selected = selection > 0 && results.indices.contains(selection) ? results[selection].id : nil
+        matchTabWindows()
         refilter()
-        if let selected, let index = results.firstIndex(where: { $0.id == selected }) {
-            selection = index
+        // The list can be up already. Keep its selected row selected, except at the top of a search, which stays on
+        // the best match.
+        guard let selected, query.isEmpty || position > 0 else { return }
+        selection = row(of: selected) ?? min(position, max(results.count - 1, 0))
+    }
+
+    /// Where `row` is in `results` now. A window that's listed as its tabs now is there as its current tab.
+    private func row(of row: Result) -> Int? {
+        if let index = results.firstIndex(where: { $0.id == row.id }) { return index }
+        guard case .window(let item) = row.target,
+              let window = tabWindowRows[item.pid]?.first(where: { $0.value.id == item.id })?.key else { return nil }
+        return results.firstIndex {
+            guard case .tab(let tab) = $0.target else { return false }
+            return tab.pid == item.pid && tab.windowOrder == window && tab.isActive
+        }
+    }
+
+    /// Pairs the browsers' window rows with the windows their tabs are in, by title.
+    private func matchTabWindows() {
+        tabWindowRows = [:]
+        for (pid, browserTabs) in tabs {
+            var unmatched = Dictionary(browserTabs.map { ($0.windowOrder, $0) }, uniquingKeysWith: { first, _ in first })
+            var rows: [Int: WindowItem] = [:]
+            for item in items where item.pid == pid && item.element != nil {
+                // The closest fit: "Inbox - Gmail - Google Chrome" is the "Inbox - Gmail" window, not the "Inbox" one.
+                let fits = unmatched.compactMap { window, tab in BrowserTabs.windowTitleFit(item.title, tab).map { (window, $0) } }
+                guard let best = fits.max(by: { $0.1 != $1.1 ? $0.1 < $1.1 : $0.0 > $1.0 }) else { continue }
+                rows[best.0] = item
+                unmatched[best.0] = nil
+            }
+            tabWindowRows[pid] = rows
         }
     }
 
@@ -169,13 +218,82 @@ final class SwitcherModel: ObservableObject {
     }
 
     private func window(of tab: BrowserTab) -> WindowItem? {
-        let matches = items.filter {
-            $0.pid == tab.pid && $0.element != nil && BrowserTabs.windowTitle($0.title, matches: tab)
+        tabWindowRows[tab.pid]?[tab.windowOrder]
+    }
+
+    // MARK: Closing and quitting
+
+    /// ⌘W: closes the selected window or tab. An app's row has no window to close.
+    func closeSelected() {
+        guard results.indices.contains(selection) else {
+            NSSound.beep()
+            return
         }
-        // For "Inbox", "Inbox - Google Chrome" rather than "Inbox - Gmail - Google Chrome".
-        guard let shortest = matches.map(\.title.count).min() else { return nil }
-        let closest = matches.filter { $0.title.count == shortest }
-        return closest.count == 1 ? closest[0] : nil
+        let result = results[selection]
+        guard closing.insert(result.id).inserted else { return }
+        switch result.target {
+        case .window(let item) where item.element != nil:
+            onCloseWindow(item)
+        case .tab(let tab):
+            onCloseTab(tab)
+        default:
+            closing.remove(result.id)
+            NSSound.beep()
+        }
+    }
+
+    /// ⌘Q: quits the app the selected row belongs to.
+    func quitSelected() {
+        guard results.indices.contains(selection), let pid = results[selection].pid else {
+            NSSound.beep()
+            return
+        }
+        onQuit(pid)
+    }
+
+    /// A close that didn't close anything is over.
+    func closeEnded(_ id: String) {
+        closing.remove(id)
+    }
+
+    func windowClosed(_ item: WindowItem) {
+        closing.remove(item.id)
+        removingRows(where: { $0.id == item.id }) {
+            items.removeAll { $0.id == item.id }
+        }
+    }
+
+    /// Puts in the browser's tabs and the windows as they are after closing `tab`, which can take its window with it
+    /// or change that window's title.
+    func tabClosed(_ tab: BrowserTab, leaving browserTabs: [BrowserTab], windows: [WindowItem]) {
+        closing.remove(tab.id)
+        removingRows(where: { $0.id == tab.id }) {
+            tabs[tab.pid] = browserTabs
+            items = windows
+        }
+    }
+
+    func appQuit(_ pid: pid_t) {
+        guard tabs[pid] != nil || items.contains(where: { $0.pid == pid }) else { return }
+        removingRows(where: { $0.pid == pid }) {
+            tabs[pid] = nil
+            items.removeAll { $0.pid == pid }
+        }
+    }
+
+    /// Makes a change that takes rows out without moving the selection: it stays on its row, or if that one went, in
+    /// the same place, on the row that took its place.
+    private func removingRows(where isRemoved: (Result) -> Bool, by change: () -> Void) {
+        let before = results
+        let selected = selection
+        change()
+        guard before.indices.contains(selected) else { return }
+        let row = before[selected]
+        if !isRemoved(row), let index = results.firstIndex(where: { $0.id == row.id && $0.title == row.title }) {
+            selection = index
+        } else {
+            selection = max(0, min(selected - before[..<selected].filter(isRemoved).count, results.count - 1))
+        }
     }
 
     /// Keyboard commands from the search field. Returns true when handled.
@@ -198,24 +316,53 @@ final class SwitcherModel: ObservableObject {
 
     private func refilter() {
         let terms = query.split(whereSeparator: \.isWhitespace).map { Array($0) }
+        // Window rows that tabs stand in for: the browser windows they're in, and app rows once there are any.
+        // Others, like Safari's Settings window, stay.
+        let tabWindowIDs = Set(tabWindowRows.values.flatMap { $0.values.map(\.id) })
+        func isListedAsTabs(_ item: WindowItem) -> Bool {
+            tabWindowIDs.contains(item.id) || item.element == nil && tabs[item.pid]?.isEmpty == false
+        }
+        func badge(of tab: BrowserTab) -> String? {
+            tabWindowRows[tab.pid]?[tab.windowOrder]?.badge
+        }
+
         if terms.isEmpty {
             firstAppIndex = nil
-            results = items.map { Result($0) }
+            // Each browser window as its tabs, the current one (the window's own row) first. Windows of a browser that
+            // have no row here, like ones on another Space, go after its last row.
+            var rows: [Result] = []
+            var itemRows: [Int] = [] // where each item's rows start
+            var listedWindows: [pid_t: Set<Int>] = [:]
+            func list(window: Int, of pid: pid_t) {
+                let windowTabs = (tabs[pid] ?? []).filter { $0.windowOrder == window }
+                let badge = tabWindowRows[pid]?[window]?.badge
+                rows += (windowTabs.filter(\.isActive) + windowTabs.filter { !$0.isActive }).map { Result($0, badge: badge) }
+                listedWindows[pid, default: []].insert(window)
+            }
+            for (index, item) in items.enumerated() {
+                itemRows.append(rows.count)
+                if !isListedAsTabs(item) {
+                    rows.append(Result(item))
+                } else if let window = tabWindowRows[item.pid]?.first(where: { $0.value.id == item.id })?.key {
+                    list(window: window, of: item.pid)
+                }
+                guard let browserTabs = tabs[item.pid], !items[(index + 1)...].contains(where: { $0.pid == item.pid }) else { continue }
+                for window in Set(browserTabs.map(\.windowOrder)).sorted() where listedWindows[item.pid]?.contains(window) != true {
+                    list(window: window, of: item.pid)
+                }
+            }
+            results = rows
             // The window you were in before this one. Not knowing it yet (just after launch), if the top window is the
             // one you're already in, default to the one below it. It isn't when, say, the desktop has focus or a
             // floating window from another app sits on top.
-            selection = items.firstIndex(where: \.isPrevious) ?? (items.count > 1 && items[0].pid == currentAppPID ? 1 : 0)
+            let previous = items.firstIndex(where: \.isPrevious) ?? (items.count > 1 && items[0].pid == currentAppPID ? 1 : 0)
+            selection = itemRows.indices.contains(previous) ? min(itemRows[previous], max(rows.count - 1, 0)) : 0
         } else {
             // Equal scores keep windows in stacking order. A browser's tabs go where its front window is,
             // the ones their windows show first.
             var found: [(score: Int, order: [Int], result: Result, isOtherTab: Bool)] = []
             for (index, item) in items.enumerated() {
-                // Rows for windows whose tabs are listed, and an app row once any are. Others, like Safari's
-                // Settings window, stay.
-                if let windows = tabWindows[item.pid], !windows.isEmpty,
-                   item.element == nil || windows.contains(where: { BrowserTabs.windowTitle(item.title, matches: $0) }) {
-                    continue
-                }
+                if isListedAsTabs(item) { continue }
                 let title = Array(item.displayTitle)
                 guard let match = Self.match(terms, in: title + [" "] + Array(item.appName)) else { continue }
                 var result = Result(item)
@@ -229,7 +376,7 @@ final class SwitcherModel: ObservableObject {
                 let place = items.firstIndex { $0.pid == pid } ?? items.count
                 for tab in browserTabs {
                     guard let match = Self.match(terms, in: tab) else { continue }
-                    var result = Result(tab)
+                    var result = Result(tab, badge: badge(of: tab))
                     result.titleHits = match.titleHits
                     result.subtitleHits = match.subtitleHits
                     let order = [place, Int(pid), tab.isActive ? 0 : 1, tab.windowOrder, tab.index]
@@ -317,7 +464,10 @@ final class SwitcherModel: ObservableObject {
 // MARK: Panel
 
 final class SwitcherPanel: NSPanel {
+    private let model: SwitcherModel
+
     init(model: SwitcherModel) {
+        self.model = model
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: Layout.width, height: Layout.searchHeight)
                 .insetBy(dx: -Layout.shadowMargin, dy: -Layout.shadowMargin),
@@ -395,10 +545,18 @@ final class SwitcherPanel: NSPanel {
         orderOut(nil)
     }
 
-    // There's no main menu in an agent app, so wire up the usual text editing shortcuts here.
+    // There's no main menu in an agent app, so wire up the usual text editing shortcuts here, and ⌘W and ⌘Q for the
+    // selected row. Taking ⌘Q here also means it can never quit Lightswitch itself.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags == .command, let key = event.charactersIgnoringModifiers {
+            if key == "w" || key == "q" {
+                // Holding the keys down doesn't go on to close or quit whatever's selected next.
+                if !event.isARepeat {
+                    if key == "w" { model.closeSelected() } else { model.quitSelected() }
+                }
+                return true
+            }
             let action: Selector? = switch key {
             case "a": #selector(NSText.selectAll(_:))
             case "c": #selector(NSText.copy(_:))
@@ -535,7 +693,8 @@ struct SwitcherView: View {
                 separator
                 ScrollViewReader { proxy in
                     ScrollView {
-                        VStack(spacing: 0) {
+                        // Lazy, since every open tab can be listed: only the rows in view are built.
+                        LazyVStack(spacing: 0) {
                             ForEach(Array(model.results.enumerated()), id: \.element.id) { index, result in
                                 // The title goes with the first app's row, so scrolling to that row shows it too.
                                 VStack(spacing: 0) {
