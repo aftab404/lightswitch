@@ -2,29 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.aftabkhan.lightswitch</string>
-    <key>CFBundleName</key>
-    <string>Lightswitch</string>
-    <key>CFBundleDisplayName</key>
-    <string>Lightswitch</string>
-    <key>CFBundleExecutable</key>
-    <string>Lightswitch</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <key>NSAppleEventsUsageDescription</key>
-    <string>Lightswitch reads the tabs open in your browser so you can search them and switch to one.</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSHighResolutionCapable</key>
-    <true/>
+	<key>CFBundleDisplayName</key>
+	<string>Lightswitch</string>
+	<key>CFBundleExecutable</key>
+	<string>Lightswitch</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.aftabkhan.lightswitch</string>
+	<key>CFBundleName</key>
+	<string>Lightswitch</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.1</string>
+	<key>CFBundleVersion</key>
+	<string>2</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Lightswitch reads the tabs open in your browser so you can search them and switch to one.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
 </dict>
 </plist>
