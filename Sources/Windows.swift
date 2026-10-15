@@ -334,11 +334,13 @@ enum WindowList {
         }
         // Our panel never activates Lightswitch, and macOS may ignore activation requests from an app that
         // isn't active. Accessibility can make the app frontmost directly; without it, go through Launch
-        // Services, the same route as clicking the app in the Dock.
+        // Services, the same route as clicking the app in the Dock. An app's own row always goes that way too:
+        // Launch Services sends a running app a reopen event, so one without windows, such as Chrome after its
+        // last tab closed, opens a new window as it would from the Dock, instead of just becoming active.
         let madeFrontmost = Accessibility.isTrusted && AXUIElementSetAttributeValue(
             AXUIElementCreateApplication(item.pid), kAXFrontmostAttribute as CFString, kCFBooleanTrue
         ) == .success
-        if !madeFrontmost, let url = app?.bundleURL {
+        if !madeFrontmost || item.element == nil, let url = app?.bundleURL {
             let configuration = NSWorkspace.OpenConfiguration()
             configuration.activates = true
             NSWorkspace.shared.openApplication(at: url, configuration: configuration)
