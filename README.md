@@ -4,7 +4,7 @@
 
 **[aftab404.github.io/lightswitch](https://aftab404.github.io/lightswitch/)**
 
-![Lightswitch: type a few letters of a window's title and jump to it](media/lightswitch-demo.gif)
+![Lightswitch: type a few letters to jump to a window or a browser tab or to open an app, and ⌘Space Return to flip back](media/lightswitch-demo.gif)
 
 Spotlight-style fuzzy window switcher that finds browser tabs and opens apps too. Press ⌘Space (or a shortcut you pick) and start typing a window title, browser tab or app name. Tabs open in Chrome, Safari, Brave, Arc, Edge, Vivaldi and Chromium are listed too, each browser window as its tabs, and typing matches them on their title or address. Installed apps that aren't running yet are listed under Applications, below the matching windows and tabs. Tab / Shift-Tab (or ↑/↓, ⌃N/⌃P) move the selection, Return jumps to that window or tab or opens that app, ⌘W closes the selected window or tab, ⌘Q quits its app, and Esc clears the query or closes the panel.
 
@@ -26,7 +26,7 @@ You only do this once per version. Lightswitch then opens its welcome window, wh
 ./build.sh install
 ```
 
-This builds `build/Lightswitch.app`, copies it to `~/Applications`, and launches it. It needs the Xcode Command Line Tools (`xcode-select --install`). `./build.sh dmg` builds a universal app and packages it as `build/Lightswitch.dmg` for release. `demo/record.sh` records the demo above with sample windows (it needs Screen Recording permission) and writes `media/lightswitch-demo.mp4` and `.gif`.
+This builds `build/Lightswitch.app`, copies it to `~/Applications`, and launches it. It needs the Xcode Command Line Tools (`xcode-select --install`). `./build.sh dmg` builds a universal app and packages it as `build/Lightswitch.dmg` for release. `demo/record.sh` records the demo above with sample windows, tabs and apps (it needs Screen Recording permission) and writes `media/lightswitch-demo.mp4` and `.gif`; `demo/record.sh stills` captures stills of the panel and lays out the Product Hunt images in `media/producthunt` and the site's share image, `assets/og.png`.
 
 Either way, the app runs as a menu bar item and starts at login once it's in an Applications folder. You can turn that off in the menu.
 

@@ -77,6 +77,20 @@ struct BrowserTab {
         nameText = Fuzzy.Text(Array(self.title) + [" "] + Array(browser.name))
         addressText = Fuzzy.Text(Array(address))
     }
+
+    #if DEMO
+    /// Made-up tabs of one browser window for demo recordings, in the order the window has them. `active` is the
+    /// current tab's position, from 1.
+    static func samples(pid: pid_t, browserName: String, icon: NSImage?, windowOrder: Int,
+                        tabs: [(title: String, url: String)], active: Int) -> [BrowserTab] {
+        let browser = RunningBrowser(pid: pid, name: browserName, icon: icon, bundleURL: nil, family: .safari)
+        let window = ListedWindow(ref: .index(windowOrder), name: tabs[active - 1].title, activeTab: active, tabs: tabs)
+        return tabs.enumerated().map { offset, tab in
+            BrowserTab(browser: browser, dialect: .safari, window: window, windowOrder: windowOrder,
+                       index: offset + 1, title: tab.title, url: tab.url)
+        }
+    }
+    #endif
 }
 
 /// Lists the tabs of running browsers and switches to them, over Apple Events. Its state is only touched on the

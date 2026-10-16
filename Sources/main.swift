@@ -139,6 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    #if DEMO
+    /// The demo adds sample tabs and apps to the sample windows it shows, and plays out Return itself.
+    var switcherModel: SwitcherModel { model }
+    #endif
+
     private func showHeldWindows() {
         guard let windows = heldWindows else { return }
         heldWindows = nil

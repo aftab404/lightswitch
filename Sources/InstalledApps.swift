@@ -70,6 +70,13 @@ enum InstalledApps {
         return icon
     }
 
+    #if DEMO
+    /// Demo recordings use the apps' own icon files, so their icons are in full colour whatever the system icon style.
+    static func setIcon(_ icon: NSImage, for app: InstalledApp) {
+        icons[app.path] = icon
+    }
+    #endif
+
     static func open(_ app: InstalledApp) {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
