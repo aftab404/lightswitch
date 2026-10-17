@@ -2,7 +2,7 @@ import AppKit
 import ServiceManagement
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenuItemValidation {
     private static let loginItemOffKey = "launchAtLoginTurnedOff"
     private static let loginItemPathKey = "launchAtLoginPath"
 
@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var shortcutItem: NSMenuItem!
     private var loginItem: NSMenuItem!
     private var accessibilityItem: NSMenuItem!
+    private var updatesItem: NSMenuItem!
     /// Browsers whose tabs are still being read for this opening, and the window list if it's waiting for them.
     private var tabReads: Set<pid_t> = []
     private var heldWindows: [WindowItem]?
@@ -346,6 +347,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginItem.target = self
         menu.addItem(loginItem)
         menu.addItem(.separator())
+
+        let aboutItem = NSMenuItem(title: "About Lightswitch", action: #selector(showAbout), keyEquivalent: "")
+        aboutItem.target = self
+        menu.addItem(aboutItem)
+
+        updatesItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updatesItem.target = self
+        menu.addItem(updatesItem)
+
+        let problemItem = NSMenuItem(title: "Report a Problem…", action: #selector(reportProblem), keyEquivalent: "")
+        problemItem.target = self
+        menu.addItem(problemItem)
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit Lightswitch", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         statusItem.menu = menu
     }
@@ -355,10 +369,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showItem.keyEquivalentModifierMask = shortcut.modifierFlags
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
         accessibilityItem.isHidden = Accessibility.isTrusted
+        updatesItem.title = Updates.isChecking ? "Checking for Updates…" : "Check for Updates…"
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        menuItem !== updatesItem || !Updates.isChecking
     }
 
     @objc private func requestAccessibility() {
         Accessibility.requestAgain()
+    }
+
+    @objc private func showAbout() {
+        About.showPanel()
+    }
+
+    /// Only ever when the user chooses it: Lightswitch makes no other network requests.
+    @objc private func checkForUpdates() {
+        Updates.check()
+    }
+
+    @objc private func reportProblem() {
+        About.reportProblem()
     }
 
     // MARK: Login item

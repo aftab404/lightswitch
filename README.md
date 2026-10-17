@@ -43,6 +43,12 @@ The build is ad-hoc signed, so every rebuild changes its signature and macOS dro
 
 The icon is drawn by `icon/make-icon.swift`; run `swift icon/make-icon.swift` to regenerate `icon/AppIcon.icns` after changing it.
 
+## Updates and problem reports
+
+- **Check for Updates…** in the menu bar icon asks GitHub for the latest release and offers to download it if it's newer than yours. That's the only time Lightswitch contacts the network, and only when you choose it: it never checks on its own, and the request says nothing about you or your Mac, only which version of Lightswitch is asking. To install an update, quit Lightswitch, open the disk image and drag Lightswitch into Applications, replacing the old copy. Then confirm the new version with **Open Anyway** and allow Accessibility again in the welcome window, as above.
+- **Report a Problem…** opens a new GitHub issue in your browser with your Lightswitch and macOS versions and your Mac's type (Apple silicon or Intel) filled in, and nothing else. Nothing is sent until you submit it there.
+- **About Lightswitch** shows which version you have.
+
 ## Notes
 
 - Windows come from the Accessibility API, which lists the current Space's windows and minimized ones. On other Spaces and in full screen it can only reach each app's main window, the one you used last, so that's the window listed for the app there, along with the window you came from. Apps with no window it can reach, including apps without windows, appear as an "App" row; selecting one does what clicking the app in the Dock does: macOS switches to a Space with its windows, and an app without any, such as Chrome after you closed its last tab, opens a new one.

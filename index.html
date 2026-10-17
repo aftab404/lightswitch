@@ -463,10 +463,10 @@
         </article>
         <article class="card">
           <div class="visual">
-            <div class="stat">372 KB<small>the whole app binary</small></div>
+            <div class="stat">3 MB<small>the whole download</small></div>
           </div>
           <h3>Light on your Mac</h3>
-          <p>About 900 lines of Swift with zero dependencies. It sits in the menu bar at 0% CPU until you call it, and never touches the network.</p>
+          <p>A few thousand lines of Swift with zero dependencies. It sits in the menu bar at 0% CPU until you call it, and only goes online when you choose Check for Updates.</p>
         </article>
         <article class="card">
           <div class="visual">
@@ -496,7 +496,7 @@
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Private by design</h4>
-          <p>No accounts, no analytics, no network requests. Window titles and tabs are read locally and never leave your Mac.</p>
+          <p>No accounts, no analytics, no tracking. Lightswitch never contacts the network unless you choose Check for Updates, and window titles and tabs are read locally and never leave your Mac.</p>
         </div>
         <div class="detail">
           <h4><svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M3 12h3M18 12h3M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/><circle cx="12" cy="12" r="3.5"/></svg>Out of the way</h4>
@@ -603,8 +603,16 @@ cd lightswitch
           <p>Apple only vouches for apps that are notarized, which needs a paid developer account. Lightswitch isn't notarized yet, so macOS asks you to confirm once with Open Anyway in Privacy &amp; Security. The full source is on GitHub, and building it yourself avoids the prompt entirely.</p>
         </details>
         <details>
+          <summary>How do I update?</summary>
+          <p>Choose <span class="path">Check for Updates…</span> from the menu bar icon. Lightswitch then asks GitHub for its latest release: the only time it goes online, and never on its own. If there's a newer version, <span class="path">Download</span> gets it. Quit Lightswitch, open the disk image and drag Lightswitch into Applications, replacing the old copy. As with the first install, confirm the new version with Open Anyway, then allow Accessibility again in the welcome window.</p>
+        </details>
+        <details>
           <summary>Why do I have to approve Accessibility again after updating?</summary>
           <p>macOS ties the permission to the exact build of the app, and each version is a new build. Lightswitch opens its welcome window when it starts without access: click <span class="path">Allow Access…</span> there (or <span class="path">Allow…</span> in the panel, or <span class="path">Grant Accessibility Access…</span> in the menu bar). It clears the stale entry so macOS asks again. If you build from source, a "Lightswitch Dev" code signing certificate in Keychain Access makes the permission stick across rebuilds.</p>
+        </details>
+        <details>
+          <summary>Something isn't working. How do I report it?</summary>
+          <p>Choose <span class="path">Report a Problem…</span> from the menu bar icon. It opens a new GitHub issue in your browser with your Lightswitch and macOS versions and your Mac's type (Apple silicon or Intel) filled in, and nothing else. Nothing is sent until you submit it, which needs a GitHub account. You can also <a href="https://github.com/aftab404/lightswitch/issues">browse the open issues</a>.</p>
         </details>
       </div>
     </section>

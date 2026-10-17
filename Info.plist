@@ -26,5 +26,7 @@
 	<string>Lightswitch reads the tabs open in your browser so you can search them and switch to one.</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 Aftab Khan</string>
 </dict>
 </plist>
